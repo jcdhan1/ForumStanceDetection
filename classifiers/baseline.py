@@ -110,8 +110,7 @@ def graph_data(scores_dict, bar_width):
     index = np.arange(n_groups)
     for n in range(5):
         print(svm_type[n])
-        dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
-        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict)))
+        
         
         #Copy each of the scores by how big the debate is so the mean and standard deviations are weighted correctly.
         dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
@@ -119,30 +118,38 @@ def graph_data(scores_dict, bar_width):
         print("Distributed Memory:", str.format('{0:.12f}',np.mean(dm_scores_expanded)), str.format('{0:.12f}',np.std(dm_scores_expanded)))
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
         print("         Skip-Gram:", str.format('{0:.12f}',np.mean(sg_scores_expanded)), str.format('{0:.12f}',np.std(sg_scores_expanded)))
-         
-        # create plot
-         
-        rects1 = plt.bar(index, dm_scores, bar_width,
-                         alpha=1,
-                         color='r',
-                         label='Distributed Memory')
-         
-        rects2 = plt.bar(index + bar_width, sg_scores, bar_width,
-                         alpha=1,
-                         color='g',
-                         label='Skip-Gram')
-         
+        
+        #Unscaled
+        dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
+        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict)))
+        rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
+        rects2 = plt.bar(index + bar_width, sg_scores, bar_width, color='g', label='Skip-Gram')
         x1,x2,y1,y2 = plt.axis()
-
         plt.axis((x1,x2,0,1))
         plt.xlabel('Debate')
         plt.ylabel('Scores')
         plt.title('Scores by Debate')
         plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
         plt.legend()
-         
         plt.tight_layout()
         plt.show()
+        
+        #Scaled
+        plt.axis((x1,x2,0,4))
+        dm_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][1][n]/len(dm_scores_expanded), tuplist(scores_dict)))
+        sg_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][2][n]/len(dm_scores_expanded), tuplist(scores_dict)))
+        rects1 = plt.bar(index, dm_scores_scaled, bar_width, color='r', label='Distributed Memory')
+        rects2 = plt.bar(index + bar_width, sg_scores_scaled, bar_width, color='g', label='Skip-Gram')     
+        plt.xlabel('Debate')
+        plt.ylabel('Scaled scores')
+        plt.title('Scaled Scores by Debate')
+        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+        
+        #Histogram
+        
 
 if __name__ == '__main__':
     #Example: ../data/CreateDebate/obama Obama

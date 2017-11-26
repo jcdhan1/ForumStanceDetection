@@ -13,7 +13,7 @@ import os, sys, getopt, re, random, nltk
 from readwrite import reader
 from gensim.models import Doc2Vec, Word2Vec
 from gensim.models.doc2vec import TaggedDocument
-from twokenize_wrapper import tokenize
+from twokenize_wrapper.twokenize import tokenize
 
 def filterStopwords(tokenised_tweet, filter="all"):
     """
@@ -47,7 +47,7 @@ def tokenise_body(body, stopwords="all"):
     return filterStopwords(tokenize(body.lower()), stopwords)
 
 class Models_Generator:
-    def __init__(self, config, num_features):
+    def __init__(self, config, num_features=100):
         self.config = config
         self.num_features = num_features  # Word vector dimensionality
         
@@ -125,5 +125,5 @@ if __name__ == '__main__':
         sys.exit()
     config = reader.CommandLine(opts, args)
     out_path =  'out'.join(config.filepath.rsplit('data', 1))
-    models_generator = Models_Generator(config, 100)
+    models_generator = Models_Generator(config)
     models_generator.generate()
