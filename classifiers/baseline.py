@@ -113,16 +113,17 @@ def graph_data(config, scores_dict, bar_width):
     for n in range(5):
         path_split = config.filepath.rsplit('data', 1)
         img_path = 'img'.join(path_split)
-        print('\subsubsection*{' + svm_type[n] + '}')
+        print('\\underline{' + svm_type[n] + '}\n')
         #Copy each of the scores by how big the debate is so the mean and standard deviations are weighted correctly.
         dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
         dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
         sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
-        print(tabulate.tabulate([['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['Mean mu','Standard Deviation sigma'], tablefmt='latex_booktabs'))
+        print(tabulate.tabulate([['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['Mean mu','Standard Deviation sigma'], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$'))
+        print('\n')
         g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['unscaled', 'scaled', 'histogram']))
         unscaled, scaled, histogram = g_type
-        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Unscaled Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs'))
+        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Unscaled Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
         #Unscaled
         dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
@@ -205,4 +206,5 @@ if __name__ == '__main__':
         print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_scores)))
         
         scores_dict[prefix] = (len(test_debate.post_list), dm_scores, sg_scores)
+    print('\\subsubsection*{Topic: ' + config.topic + '}')
     graph_data(config, scores_dict=scores_dict, bar_width=0.5)
