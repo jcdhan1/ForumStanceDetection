@@ -120,10 +120,11 @@ def graph_data(config, scores_dict, bar_width):
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
         sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
         print(tabulate.tabulate([['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['Mean mu','Standard Deviation sigma'], tablefmt='latex_booktabs'))
+        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['unscaled', 'scaled', 'histogram']))
+        unscaled, scaled, histogram = g_type
+        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Unscaled Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs'))
         
         #Unscaled
-        unscaled = 'unscaled' + svm_type[n] + '.png'
-        print('\includegraphics{img' + path_split[1].strip() + '/' + unscaled + '}')
         dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
         sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
         rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
@@ -140,8 +141,6 @@ def graph_data(config, scores_dict, bar_width):
         plt.show()
         
         #Scaled
-        scaled = 'scaled' + svm_type[n] + '.png'
-        print('\includegraphics{img' + path_split[1].strip() + '/' + scaled + '}')
         dm_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][1][n]/len(dm_scores_expanded), tuplist(scores_dict)))
         sg_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][2][n]/len(dm_scores_expanded), tuplist(scores_dict)))
         rects1 = plt.bar(index, dm_scores_scaled, bar_width, color='r', label='Distributed Memory')
@@ -157,8 +156,6 @@ def graph_data(config, scores_dict, bar_width):
         plt.show()
         
         #Histogram
-        histogram = 'histogram' + svm_type[n].strip() + '.png'
-        print('\includegraphics{img' + path_split[1] + '/' + histogram + '}')
         bins=np.linspace(0, 1, 50)
         plt.hist(dm_scores_expanded, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
         plt.hist(sg_scores_expanded, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
