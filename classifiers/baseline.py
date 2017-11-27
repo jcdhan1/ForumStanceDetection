@@ -9,9 +9,10 @@ OPTIONS:
     --topic=, -T Topic  : This is the target of the opening posts.
 ------------------------------------------------------------
 """
-import os, sys, getopt
+import os, sys, getopt, tabulate
 import numpy as np
 import matplotlib.pyplot as plt
+from pylab import savefig
 from readwrite import reader
 from gensim.models import Doc2Vec, Word2Vec
 from sklearn import svm
@@ -22,8 +23,9 @@ class Preprocessor:
         self.train_debates = train_debates
         self.test_debate = test_debate
         self.prefix = prefix
-        self.model_dm = Doc2Vec.load(out_path + '/' + self.prefix + '.dmv')
-        self.model_sg = Word2Vec.load(out_path + '/' + self.prefix + '.sgv')
+        self.out_path = 'out'.join(config.filepath.rsplit('data', 1))
+        self.model_dm = Doc2Vec.load(self.out_path + '/' + self.prefix + '.dmv')
+        self.model_sg = Word2Vec.load(self.out_path + '/' + self.prefix + '.sgv')
         self.num_features = 100
         self.stance_dict = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
         
@@ -103,26 +105,27 @@ def multiscore(train_arrays, train_labels, test_arrays, test_labels):
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
 
-def graph_data(scores_dict, bar_width):
+def graph_data(config, scores_dict, bar_width):
     n_groups = len(scores_dict)
     svm_type = ['Liblinear', 'Linear', 'Polynomial','Sigmoid','Radial Basis Function']
     fig, ax = plt.subplots()
     index = np.arange(n_groups)
     for n in range(5):
-        print(svm_type[n])
-        
-        
+        path_split = config.filepath.rsplit('data', 1)
+        img_path = 'img'.join(path_split)
+        print('\subsubsection*{' + svm_type[n] + '}')
         #Copy each of the scores by how big the debate is so the mean and standard deviations are weighted correctly.
         dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
-        dm_mean, dm_sd = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
-        print("                    Mean           Standard Deviation")
-        print("Distributed Memory:", str.format('{0:.12f}',dm_mean), str.format('{0:.12f}',dm_sd))
+        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
-        sg_mean, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
-        print("         Skip-Gram:", str.format('{0:.12f}',sg_mean), str.format('{0:.12f}',sg_sd))
+        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
+        print(tabulate.tabulate([['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['Mean mu','Standard Deviation sigma'], tablefmt='latex_booktabs'))
+        
         #Unscaled
+        unscaled = 'unscaled' + svm_type[n] + '.png'
+        print('\includegraphics{img' + path_split[1].strip() + '/' + unscaled + '}')
         dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
-        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict)))
+        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
         rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
         rects2 = plt.bar(index + bar_width, sg_scores, bar_width, color='c', label='Skip-Gram')
         x1,x2,y1,y2 = plt.axis()
@@ -133,9 +136,12 @@ def graph_data(scores_dict, bar_width):
         plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
         plt.legend()
         plt.tight_layout()
+        plt.savefig(img_path + '/' + unscaled, bbox_inches='tight')
         plt.show()
         
         #Scaled
+        scaled = 'scaled' + svm_type[n] + '.png'
+        print('\includegraphics{img' + path_split[1].strip() + '/' + scaled + '}')
         dm_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][1][n]/len(dm_scores_expanded), tuplist(scores_dict)))
         sg_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][2][n]/len(dm_scores_expanded), tuplist(scores_dict)))
         rects1 = plt.bar(index, dm_scores_scaled, bar_width, color='r', label='Distributed Memory')
@@ -147,9 +153,12 @@ def graph_data(scores_dict, bar_width):
         plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
         plt.legend()
         plt.tight_layout()
+        plt.savefig(img_path + '/' + scaled, bbox_inches='tight')
         plt.show()
         
         #Histogram
+        histogram = 'histogram' + svm_type[n].strip() + '.png'
+        print('\includegraphics{img' + path_split[1] + '/' + histogram + '}')
         bins=np.linspace(0, 1, 50)
         plt.hist(dm_scores_expanded, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
         plt.hist(sg_scores_expanded, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
@@ -157,6 +166,7 @@ def graph_data(scores_dict, bar_width):
         plt.title('Distribution of Scores')
         plt.legend()
         plt.tight_layout()
+        plt.savefig(img_path + '/' + histogram, bbox_inches='tight')
         plt.show()
 
 if __name__ == '__main__':
@@ -198,4 +208,4 @@ if __name__ == '__main__':
         print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_scores)))
         
         scores_dict[prefix] = (len(test_debate.post_list), dm_scores, sg_scores)
-    graph_data(scores_dict=scores_dict, bar_width=0.5)
+    graph_data(config, scores_dict=scores_dict, bar_width=0.5)

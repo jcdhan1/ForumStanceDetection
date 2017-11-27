@@ -21,4 +21,4 @@ Make sure one has the following directories and structure somewhere:
 
  1. If one does not have the nltk corpus downloaded or one is running a fresh kernel, run prerequisites.py
  2. Run generate_models.py 
- 3. Run the files in /classify
+ 3. Run the files in /classifiers
