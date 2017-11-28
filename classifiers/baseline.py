@@ -113,19 +113,19 @@ def graph_data(config, scores_dict, bar_width):
     for n in range(5):
         path_split = config.filepath.rsplit('data', 1)
         img_path = 'img'.join(path_split)
-        print('\\underline{' + svm_type[n] + '}\n')
         #Copy each of the scores by how big the debate is so the mean and standard deviations are weighted correctly.
         dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
         dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
         sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
-        print(tabulate.tabulate([['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['Mean mu','Standard Deviation sigma'], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$'))
-        print('\n')
+        print('\\begin{table}[ht]\n\\centering\n')
+        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['',svm_type[n],''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
+        print('\\end{table}\n')
         g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['unscaled', 'scaled', 'histogram']))
         unscaled, scaled, histogram = g_type
-        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Unscaled Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
+        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
-        #Unscaled
+        #Scores
         dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
         sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
         rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
