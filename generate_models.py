@@ -62,7 +62,7 @@ class Models_Generator:
         print('Generating Distributed Memory and Skip-Gram model files for', len(self.subsetAZ), 'debates.')
         for prefix in self.subsetAZ:
             #Source, debate to use as testing-data, word vector dimensionality, window size, Number of threads to run in parallel
-            vec_args = (prefix, 7, 4)  
+            vec_args = (prefix, 15, 4)  
             self.distributed_memory(*vec_args)
             self.skipgram(*vec_args)
     
