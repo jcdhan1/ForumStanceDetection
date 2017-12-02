@@ -26,7 +26,7 @@ class Preprocessor:
         self.out_path = 'out'.join(config.filepath.rsplit('data', 1))
         self.model_dm = Doc2Vec.load(self.out_path + '/' + self.prefix + '.dmv')
         self.model_sg = Word2Vec.load(self.out_path + '/' + self.prefix + '.sgv')
-        self.num_features = 100
+        self.num_features = 175
         self.stance_dict = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
         
     #Distributed Memory Model
@@ -113,21 +113,23 @@ def graph_data(config, scores_dict, bar_width):
     for n in range(5):
         path_split = config.filepath.rsplit('data', 1)
         img_path = 'img'.join(path_split)
-        #Copy each of the scores by how big the debate is so the mean and standard deviations are weighted correctly.
+        dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
+        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
+        dm_mu1, dm_sd1 = tuple(map(lambda fn: fn(dm_scores), (np.mean, np.std)))
+        sg_mu1, sg_sd1 = tuple(map(lambda fn: fn(sg_scores), (np.mean, np.std)))
+        #Copy each of the scores by how big the debate is to get weighted means and standard deviations
         dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
-        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
+        dm_mu2, dm_sd2 = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
         sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
-        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
+        sg_mu2, sg_sd2 = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
         print('\\begin{table}[ht]\n\\centering\n')
-        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['Distributed Memory',dm_mu,dm_sd],['Skip-Gram',sg_mu,sg_sd]], ['',svm_type[n],''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
+        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma', 'Scaled mu', 'Scaled sigma'],['D.M.',dm_mu1,dm_sd1,dm_mu2,dm_sd2],['S.G.',sg_mu1,sg_sd1,sg_mu2,sg_sd2]], [svm_type[n],'','','',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
         print('\\end{table}\n')
         g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['unscaled', 'scaled', 'histogram']))
         unscaled, scaled, histogram = g_type
         print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
         #Scores
-        dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
-        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
         rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
         rects2 = plt.bar(index + bar_width, sg_scores, bar_width, color='c', label='Skip-Gram')
         x1,x2,y1,y2 = plt.axis()
@@ -158,14 +160,15 @@ def graph_data(config, scores_dict, bar_width):
         
         #Histogram
         bins=np.linspace(0, 1, 50)
-        plt.hist(dm_scores_expanded, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
-        plt.hist(sg_scores_expanded, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
+        plt.hist(dm_scores, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
+        plt.hist(sg_scores, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
         plt.xlabel('Score')
         plt.title('Distribution of Scores')
         plt.legend()
         plt.tight_layout()
         plt.savefig(img_path + '/' + histogram, bbox_inches='tight')
         plt.show()
+        print('\\newline\n\\newline')
 
 if __name__ == '__main__':
     #Example: ../data/CreateDebate/obama Obama
@@ -201,9 +204,9 @@ if __name__ == '__main__':
         #Score for multiple SVMs
         prepro=Preprocessor(train_debates, test_debate, prefix)
         dm_scores = multiscore(*prepro.distributed_memory())
-        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_scores)))
+        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_scores)),len(test_debate.post_list))
         sg_scores = multiscore(*prepro.skipgram())
-        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_scores)))
+        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_scores)),len(test_debate.post_list))
         
         scores_dict[prefix] = (len(test_debate.post_list), dm_scores, sg_scores)
     print('\\subsubsection*{Topic: ' + config.topic + '}')
