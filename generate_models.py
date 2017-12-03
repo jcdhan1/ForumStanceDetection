@@ -47,7 +47,7 @@ def tokenise_body(body, stopwords="all"):
     return filterStopwords(tokenize(body.lower()), stopwords)
 
 class Models_Generator:
-    def __init__(self, config, num_features=175):
+    def __init__(self, config, num_features=151):
         self.config = config
         self.num_features = num_features  # Word vector dimensionality
         

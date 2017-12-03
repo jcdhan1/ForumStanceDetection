@@ -26,7 +26,7 @@ class Preprocessor:
         self.out_path = 'out'.join(config.filepath.rsplit('data', 1))
         self.model_dm = Doc2Vec.load(self.out_path + '/' + self.prefix + '.dmv')
         self.model_sg = Word2Vec.load(self.out_path + '/' + self.prefix + '.sgv')
-        self.num_features = 175
+        self.num_features = 151
         self.stance_dict = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
         
     #Distributed Memory Model
