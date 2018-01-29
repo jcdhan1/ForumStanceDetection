@@ -93,13 +93,20 @@ class Preprocessor:
         return train_arrays, train_labels, test_arrays, test_labels
     
 
-
+def manual_score(classifier,test_arr, test_lab):
+    denominator=len(list(test_lab))
+    numerator=0
+    for c in range(denominator):
+        if(classifier.predict(test_arr[c].reshape(1, -1))[0]==test_lab[c]):
+            numerator += 1
+    return numerator/denominator
+    
 def multiscore(train_arrays, train_labels, test_arrays, test_labels):
     svms = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf']))
     scores = []
     for c in svms:
         c.fit(train_arrays, train_labels)
-        scores.append(c.score(test_arrays, test_labels)) 
+        scores.append(manual_score(c,test_arrays, test_labels)-c.score(test_arrays, test_labels)) 
     return scores
 
 def tuplist(d):
@@ -115,19 +122,14 @@ def graph_data(config, scores_dict, bar_width):
         img_path = 'img'.join(path_split)
         dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
         sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
-        dm_mu1, dm_sd1 = tuple(map(lambda fn: fn(dm_scores), (np.mean, np.std)))
-        sg_mu1, sg_sd1 = tuple(map(lambda fn: fn(sg_scores), (np.mean, np.std)))
-        #Copy each of the scores by how big the debate is to get weighted means and standard deviations
-        dm_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][1][n]], tuplist(scores_dict))))
-        dm_mu2, dm_sd2 = tuple(map(lambda fn: fn(dm_scores_expanded), (np.mean, np.std)))
-        sg_scores_expanded = np.concatenate(list(map(lambda s: s[1][0]*[s[1][2][n]], tuplist(scores_dict))))
-        sg_mu2, sg_sd2 = tuple(map(lambda fn: fn(sg_scores_expanded), (np.mean, np.std)))
+        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores), (np.mean, np.std)))
+        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores), (np.mean, np.std)))
         print('\\begin{table}[ht]\n\\centering\n')
-        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma', 'Scaled mu', 'Scaled sigma'],['D.M.',dm_mu1,dm_sd1,dm_mu2,dm_sd2],['S.G.',sg_mu1,sg_sd1,sg_mu2,sg_sd2]], [svm_type[n],'','','',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
+        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['D.M.',dm_mu,dm_sd],['S.G.',sg_mu,sg_sd]], [svm_type[n],'',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
         print('\\end{table}\n')
-        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['unscaled', 'scaled', 'histogram']))
-        unscaled, scaled, histogram = g_type
-        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Scores', 'Scaled Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
+        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['score_by_debate', 'histogram']))
+        score_by_debate, histogram = g_type
+        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
         #Scores
         rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
@@ -140,22 +142,7 @@ def graph_data(config, scores_dict, bar_width):
         plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
         plt.legend()
         plt.tight_layout()
-        plt.savefig(img_path + '/' + unscaled, bbox_inches='tight')
-        plt.show()
-        
-        #Scaled
-        dm_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][1][n]/len(dm_scores_expanded), tuplist(scores_dict)))
-        sg_scores_scaled = list(map(lambda entry: 15*entry[1][0]*entry[1][2][n]/len(dm_scores_expanded), tuplist(scores_dict)))
-        rects1 = plt.bar(index, dm_scores_scaled, bar_width, color='r', label='Distributed Memory')
-        rects2 = plt.bar(index + bar_width, sg_scores_scaled, bar_width, color='c', label='Skip-Gram')     
-        plt.axis((x1,x2,0,4))
-        plt.xlabel('Debate')
-        plt.ylabel('Scaled scores')
-        plt.title('Scaled Scores by Debate')
-        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(img_path + '/' + scaled, bbox_inches='tight')
+        plt.savefig(img_path + '/' + score_by_debate, bbox_inches='tight')
         plt.show()
         
         #Histogram
