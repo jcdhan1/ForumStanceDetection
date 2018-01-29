@@ -98,24 +98,34 @@ class Multiclassifer:
         self.train_labels=train_labels
         self.test_arrays=test_arrays
         self.test_labels=test_labels
+        self.classes=list(set(test_labels))
         self.svms = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf']))
+        
+        self.predictions = []
         for c in self.svms:
-            c.fit(train_arrays, train_labels)
-    
-    def manual_acc(classifier,test_arr, test_lab):
-        denominator=len(list(test_lab))
-        numerator=0
-        for c in range(denominator):
-            if(classifier.predict(test_arr[c].reshape(1, -1))[0]==test_lab[c]):
-                numerator += 1
-        return numerator/denominator
+            c.fit(self.train_arrays, self.train_labels)
+            self.predictions.appened(c.predict(self.train_arrays))
         
     def accuracies(self):
         acc = []
         for c in self.svms:
             acc.append(c.score(self.test_arrays, self.test_labels))
         return acc
-
+    
+    #Numerators of precisions and recalls
+    def correct(self):
+        corr=[]
+        for i in range(len(self.svms)):
+            correctly_classified_as = []
+            for lbl in self.classes:
+                count=0
+                for j in range(len(self.test_labels)):
+                    if self.predictions[i][j]==self.test_labels[i] and self.test_labels[i]==lbl:
+                       count += 1
+                correctly_classified_as.append(count)
+            corr.append(correctly_classified_as)
+        return corr
+    
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
 
