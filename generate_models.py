@@ -49,10 +49,11 @@ def tokenise_body(body, stopwords="all"):
 class Models_Generator:
     def __init__(self, config, num_features=151):
         self.config = config
+        self.out_path =  'out'.join(config.filepath.rsplit('data', 1))
         self.num_features = num_features  # Word vector dimensionality
         
         """Although printing the set will show the letters sorted, the letters are not accessed in order when
-        #the set's converted to a list or used in a for-loop hence it must be converted to a list and then sorted."""
+            the set's converted to a list or used in a for-loop hence it must be converted to a list and then sorted."""
         subsetAZ = list(set(map(lambda f: f[0], os.listdir(config.filepath))))
         subsetAZ.sort()
         self.subsetAZ = subsetAZ
@@ -95,7 +96,7 @@ class Models_Generator:
             random.shuffle(shuffled)
             model_dm.train(shuffled, total_examples=model_dm.corpus_count, epochs=model_dm.iter)
         print('Saving DM model for when', prefix, 'debates are the testing data.')
-        model_dm.save(out_path + '/' + prefix + '.dmv') #distributed memory vector file
+        model_dm.save(self.out_path + '/' + prefix + '.dmv') #distributed memory vector file
 
     def skipgram(self, prefix, context, num_workers):
         train_debates =  reader.Debate(self.config.filepath, prefix, self.config.topic, True)
@@ -110,7 +111,7 @@ class Models_Generator:
                         workers=num_workers,
                         sg=1)
         print('Saving Skip-Gram model for when', prefix, 'debates are the testing data.')    
-        model_sg.save(out_path + '/' + prefix + '.sgv') #skip-gram vector file
+        model_sg.save(self.out_path + '/' + prefix + '.sgv') #skip-gram vector file
 
 if __name__ == '__main__':
     #Example: ./data/CreateDebate/obama Obama
@@ -124,6 +125,5 @@ if __name__ == '__main__':
         print(help,file=sys.stderr)
         sys.exit()
     config = reader.CommandLine(opts, args)
-    out_path =  'out'.join(config.filepath.rsplit('data', 1))
     models_generator = Models_Generator(config)
     models_generator.generate()
