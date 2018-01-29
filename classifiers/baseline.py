@@ -92,65 +92,72 @@ class Preprocessor:
         test_labels = list(map(lambda l: self.stance_dict[l], self.test_debate.get_labels()))
         return train_arrays, train_labels, test_arrays, test_labels
     
-
-def manual_score(classifier,test_arr, test_lab):
-    denominator=len(list(test_lab))
-    numerator=0
-    for c in range(denominator):
-        if(classifier.predict(test_arr[c].reshape(1, -1))[0]==test_lab[c]):
-            numerator += 1
-    return numerator/denominator
+class Multiclassifer:
+    def __init__(self,train_arrays, train_labels, test_arrays, test_labels):
+        self.train_arrays=train_arrays
+        self.train_labels=train_labels
+        self.test_arrays=test_arrays
+        self.test_labels=test_labels
+        self.svms = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf']))
+        for c in self.svms:
+            c.fit(train_arrays, train_labels)
     
-def multiscore(train_arrays, train_labels, test_arrays, test_labels):
-    svms = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf']))
-    scores = []
-    for c in svms:
-        c.fit(train_arrays, train_labels)
-        scores.append(manual_score(c,test_arrays, test_labels)-c.score(test_arrays, test_labels)) 
-    return scores
+    def manual_acc(classifier,test_arr, test_lab):
+        denominator=len(list(test_lab))
+        numerator=0
+        for c in range(denominator):
+            if(classifier.predict(test_arr[c].reshape(1, -1))[0]==test_lab[c]):
+                numerator += 1
+        return numerator/denominator
+        
+    def accuracies(self):
+        acc = []
+        for c in self.svms:
+            acc.append(c.score(self.test_arrays, self.test_labels))
+        return acc
 
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
 
-def graph_data(config, scores_dict, bar_width):
-    n_groups = len(scores_dict)
+def graph_data(config, acc_dict, bar_width):
+    n_groups = len(acc_dict)
     svm_type = ['Liblinear', 'Linear', 'Polynomial','Sigmoid','Radial Basis Function']
     fig, ax = plt.subplots()
     index = np.arange(n_groups)
     for n in range(5):
         path_split = config.filepath.rsplit('data', 1)
         img_path = 'img'.join(path_split)
-        dm_scores = list(map(lambda entry: entry[1][1][n], tuplist(scores_dict)))
-        sg_scores = list(map(lambda entry: entry[1][2][n], tuplist(scores_dict))) 
-        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_scores), (np.mean, np.std)))
-        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_scores), (np.mean, np.std)))
+        dm_acc = list(map(lambda entry: entry[1][1][n], tuplist(acc_dict)))
+        sg_acc = list(map(lambda entry: entry[1][2][n], tuplist(acc_dict))) 
+        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_acc), (np.mean, np.std)))
+        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_acc), (np.mean, np.std)))
         print('\\begin{table}[ht]\n\\centering\n')
         print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['D.M.',dm_mu,dm_sd],['S.G.',sg_mu,sg_sd]], [svm_type[n],'',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
         print('\\end{table}\n')
-        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['score_by_debate', 'histogram']))
-        score_by_debate, histogram = g_type
-        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Scores', 'Distribution of Scores'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
+        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['acc_by_debate', 'histogram']))
+        acc_by_debate, histogram = g_type
+        print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Accuracies', 'Distribution of Accuracies'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
-        #Scores
-        rects1 = plt.bar(index, dm_scores, bar_width, color='r', label='Distributed Memory')
-        rects2 = plt.bar(index + bar_width, sg_scores, bar_width, color='c', label='Skip-Gram')
+        #Accuracies
+        rects1 = plt.bar(index, dm_acc, bar_width, color='r', label='Distributed Memory')
+        rects2 = plt.bar(index + bar_width, sg_acc, bar_width, color='c', label='Skip-Gram')
         x1,x2,y1,y2 = plt.axis()
         plt.axis((x1,x2,0,1))
         plt.xlabel('Debate')
-        plt.ylabel('Scores')
-        plt.title('Scores by Debate')
-        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(scores_dict))))
+        plt.ylabel('Accuracies')
+        plt.title('Accuracies by Debate')
+        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(acc_dict))))
         plt.legend()
         plt.tight_layout()
-        plt.savefig(img_path + '/' + score_by_debate, bbox_inches='tight')
+        plt.savefig(img_path + '/' + acc_by_debate, bbox_inches='tight')
         plt.show()
         
         #Histogram
         bins=np.linspace(0, 1, 50)
-        plt.hist(dm_scores, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
-        plt.hist(sg_scores, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
+        plt.hist(dm_acc, color="r", bins=bins, alpha=0.5, label='Distributed Memory')
+        plt.hist(sg_acc, color="c", bins=bins, alpha=0.5, label='Skip-Gram')   
         plt.xlabel('Score')
-        plt.title('Distribution of Scores')
+        plt.title('Distribution of Accuracies')
         plt.legend()
         plt.tight_layout()
         plt.savefig(img_path + '/' + histogram, bbox_inches='tight')
@@ -177,7 +184,7 @@ if __name__ == '__main__':
     subsetAZ = list(set(map(lambda f: f[0], os.listdir(config.filepath))))
     subsetAZ.sort()
     
-    scores_dict = dict.fromkeys(subsetAZ)
+    acc_dict = dict.fromkeys(subsetAZ)
     
     print('     Liblinear     |Linear        |Polynomial    |Sigmoid       |Radial Basis Function')
     for prefix in subsetAZ:
@@ -190,11 +197,13 @@ if __name__ == '__main__':
         
         #Score for multiple SVMs
         prepro=Preprocessor(train_debates, test_debate, prefix)
-        dm_scores = multiscore(*prepro.distributed_memory())
-        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_scores)),len(test_debate.post_list))
-        sg_scores = multiscore(*prepro.skipgram())
-        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_scores)),len(test_debate.post_list))
+        dm_classifiers = Multiclassifer(*prepro.distributed_memory())
+        dm_acc = dm_classifiers.accuracies()
+        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_acc)),len(test_debate.post_list))
+        sg_classifiers = Multiclassifer(*prepro.skipgram())
+        sg_acc = sg_classifiers.accuracies()
+        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_acc)),len(test_debate.post_list))
         
-        scores_dict[prefix] = (len(test_debate.post_list), dm_scores, sg_scores)
+        acc_dict[prefix] = (len(test_debate.post_list), dm_acc, sg_acc)
     print('\\subsubsection*{Topic: ' + config.topic + '}')
-    graph_data(config, scores_dict=scores_dict, bar_width=0.5)
+    graph_data(config, acc_dict=acc_dict, bar_width=0.5)
