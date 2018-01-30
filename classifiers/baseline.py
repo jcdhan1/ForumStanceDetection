@@ -101,30 +101,42 @@ class Multiclassifer:
         self.classes=list(set(test_labels))
         self.svms = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf']))
         
-        self.predictions = []
+        #Train every SVM on train_arrays
         for c in self.svms:
             c.fit(self.train_arrays, self.train_labels)
-            self.predictions.appened(c.predict(self.train_arrays))
+            
+        #Test every SVM on test_arrays and store the evaluation metrics
+        self.metrics=list(map(lambda c: self.eval_metrics(c),self.svms))
+
+    #Quadruple of accuracy, a precision list, a recall list and an F1 score list.
+    def eval_metrics(self,classifier):
+        accu = classifier.score(self.test_arrays, self.test_labels) #accuracy
+        pred = classifier.predict(self.test_arrays) #predictions
+        corr=[] #numerator of precision and recall for each class
+        classed = []
+        actual = []
+        for i in range(len(self.classes)):
+            corr_count=0
+            classed_count=0
+            for j in range(len(self.test_labels)):
+                if pred[j]==self.classes[i]:
+                    classed_count +=1
+                    if self.test_labels[j]==self.classes[i]:
+                        corr_count += 1
+            corr.append(corr_count) #How many are correctly classified as classes[i]
+            classed.append(classed_count) #How many are classified as classes[i]
+            actual.append(list(self.test_labels).count(self.classes[i])) #How many are actually in classes[i]
+        prc=map(lambda numer,denomin: numer/denomin,zip(corr,classed))
+        rcl=map(lambda numer,denomin: numer/denomin,zip(corr,actual))
+        f1 = map(lambda p,r: 2*p*r/(p+r),zip(prc,rcl))
         
+        return (accu,prc,rcl,f1)
+    
     def accuracies(self):
         acc = []
         for c in self.svms:
             acc.append(c.score(self.test_arrays, self.test_labels))
         return acc
-    
-    #Numerators of precisions and recalls
-    def correct(self):
-        corr=[]
-        for i in range(len(self.svms)):
-            correctly_classified_as = []
-            for lbl in self.classes:
-                count=0
-                for j in range(len(self.test_labels)):
-                    if self.predictions[i][j]==self.test_labels[i] and self.test_labels[i]==lbl:
-                       count += 1
-                correctly_classified_as.append(count)
-            corr.append(correctly_classified_as)
-        return corr
     
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
@@ -208,10 +220,12 @@ if __name__ == '__main__':
         #Score for multiple SVMs
         prepro=Preprocessor(train_debates, test_debate, prefix)
         dm_classifiers = Multiclassifer(*prepro.distributed_memory())
-        dm_acc = dm_classifiers.accuracies()
+        dm_acc = list(map(lambda mt: mt[0], dm_classifiers.metrics))
+        print(dm_acc == dm_classifiers.accuracies())
         print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_acc)),len(test_debate.post_list))
         sg_classifiers = Multiclassifer(*prepro.skipgram())
-        sg_acc = sg_classifiers.accuracies()
+        sg_acc = list(map(lambda mt: mt[0], sg_classifiers.metrics))
+        print(sg_acc == sg_classifiers.accuracies())
         print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_acc)),len(test_debate.post_list))
         
         acc_dict[prefix] = (len(test_debate.post_list), dm_acc, sg_acc)
