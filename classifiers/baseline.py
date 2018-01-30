@@ -132,12 +132,6 @@ class Multiclassifer:
         
         return (accu,prc,rcl,f1)
     
-    def accuracies(self):
-        acc = []
-        for c in self.svms:
-            acc.append(c.score(self.test_arrays, self.test_labels))
-        return acc
-    
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
 
@@ -221,11 +215,9 @@ if __name__ == '__main__':
         prepro=Preprocessor(train_debates, test_debate, prefix)
         dm_classifiers = Multiclassifer(*prepro.distributed_memory())
         dm_acc = list(map(lambda mt: mt[0], dm_classifiers.metrics))
-        print(dm_acc == dm_classifiers.accuracies())
         print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_acc)),len(test_debate.post_list))
         sg_classifiers = Multiclassifer(*prepro.skipgram())
         sg_acc = list(map(lambda mt: mt[0], sg_classifiers.metrics))
-        print(sg_acc == sg_classifiers.accuracies())
         print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_acc)),len(test_debate.post_list))
         
         acc_dict[prefix] = (len(test_debate.post_list), dm_acc, sg_acc)
