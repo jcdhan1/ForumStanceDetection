@@ -126,8 +126,8 @@ class Multiclassifer:
             corr.append(corr_count) #How many are correctly classified as classes[i]
             classed.append(classed_count) #How many are classified as classes[i]
             actual.append(list(self.test_labels).count(self.classes[i])) #How many are actually in classes[i]
-        prc=map(lambda numer,denomin: numer/denomin,zip(corr,classed))
-        rcl=map(lambda numer,denomin: numer/denomin,zip(corr,actual))
+        prc= map(lambda numer,denomin: numer/denomin,zip(corr,classed))
+        rcl= map(lambda numer,denomin: numer/denomin,zip(corr,actual))
         f1 = map(lambda p,r: 2*p*r/(p+r),zip(prc,rcl))
         
         return (accu,prc,rcl,f1)
@@ -135,22 +135,22 @@ class Multiclassifer:
 def tuplist(d):
     return [(k, v) for k, v in d.items()]
 
-def graph_data(config, acc_dict, bar_width):
-    n_groups = len(acc_dict)
+def graph_data(config, met_dict, bar_width):
+    n_groups = len(met_dict)
     svm_type = ['Liblinear', 'Linear', 'Polynomial','Sigmoid','Radial Basis Function']
     fig, ax = plt.subplots()
     index = np.arange(n_groups)
     for n in range(5):
         path_split = config.filepath.rsplit('data', 1)
         img_path = 'img'.join(path_split)
-        dm_acc = list(map(lambda entry: entry[1][1][n], tuplist(acc_dict)))
-        sg_acc = list(map(lambda entry: entry[1][2][n], tuplist(acc_dict))) 
-        dm_mu, dm_sd = tuple(map(lambda fn: fn(dm_acc), (np.mean, np.std)))
-        sg_mu, sg_sd = tuple(map(lambda fn: fn(sg_acc), (np.mean, np.std)))
+        dm_acc = list(map(lambda entry: entry[1][1][0][n], tuplist(met_dict)))
+        sg_acc = list(map(lambda entry: entry[1][2][0][n], tuplist(met_dict))) 
+        dm_acc_mu, dm_acc_sd = tuple(map(lambda fn: fn(dm_acc), (np.mean, np.std)))
+        sg_acc_mu, sg_acc_sd = tuple(map(lambda fn: fn(sg_acc), (np.mean, np.std)))
         print('\\begin{table}[ht]\n\\centering\n')
-        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['D.M.',dm_mu,dm_sd],['S.G.',sg_mu,sg_sd]], [svm_type[n],'',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
+        print(tabulate.tabulate([['','Mean mu','Standard Deviation sigma'],['D.M.',dm_acc_mu,dm_acc_sd],['S.G.',sg_acc_mu,sg_acc_sd]], [svm_type[n],'',''], tablefmt='latex_booktabs').replace('mu', '$\mu$').replace('sigma', '$\sigma$').replace('lll', 'rll').replace('\\toprule', '').replace('\\bottomrule',''))
         print('\\end{table}\n')
-        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['acc_by_debate', 'histogram']))
+        g_type = tuple(map(lambda g: g + svm_type[n].replace(" ", "") + '.png', ['acc_by_debate', 'acc_hist']))
         acc_by_debate, histogram = g_type
         print(tabulate.tabulate([map(lambda g: 'includegraphics img' + path_split[1] + '/' + g, g_type)], ['Accuracies', 'Distribution of Accuracies'], tablefmt='latex_booktabs').replace('png','png}').replace('includegraphics ','\includegraphics[width=0.3\\textwidth]{'))
         
@@ -162,7 +162,7 @@ def graph_data(config, acc_dict, bar_width):
         plt.xlabel('Debate')
         plt.ylabel('Accuracies')
         plt.title('Accuracies by Debate')
-        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(acc_dict))))
+        plt.xticks(index+0.5*bar_width, list(map(lambda entry: entry[0], tuplist(met_dict))))
         plt.legend()
         plt.tight_layout()
         plt.savefig(img_path + '/' + acc_by_debate, bbox_inches='tight')
@@ -200,7 +200,7 @@ if __name__ == '__main__':
     subsetAZ = list(set(map(lambda f: f[0], os.listdir(config.filepath))))
     subsetAZ.sort()
     
-    acc_dict = dict.fromkeys(subsetAZ)
+    met_dict = dict.fromkeys(subsetAZ)
     
     print('     Liblinear     |Linear        |Polynomial    |Sigmoid       |Radial Basis Function')
     for prefix in subsetAZ:
@@ -209,17 +209,17 @@ if __name__ == '__main__':
         #Testing data: files about config.topic that begin with the prefix
         test_debate = reader.Debate(config.filepath, prefix, config.topic)
         
-        #Preparing Vectors for Classifier
-        
-        #Score for multiple SVMs
+        #Preparing vectors for classifiers
         prepro=Preprocessor(train_debates, test_debate, prefix)
-        dm_classifiers = Multiclassifer(*prepro.distributed_memory())
-        dm_acc = list(map(lambda mt: mt[0], dm_classifiers.metrics))
-        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_acc)),len(test_debate.post_list))
-        sg_classifiers = Multiclassifer(*prepro.skipgram())
-        sg_acc = list(map(lambda mt: mt[0], sg_classifiers.metrics))
-        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_acc)),len(test_debate.post_list))
         
-        acc_dict[prefix] = (len(test_debate.post_list), dm_acc, sg_acc)
+        #Get metrics from multiple SVMs
+        dm_classifiers = Multiclassifer(*prepro.distributed_memory())
+        dm_met = list(zip(*dm_classifiers.metrics))
+        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_met[0])),len(test_debate.post_list))
+        sg_classifiers = Multiclassifer(*prepro.skipgram())
+        sg_met = list(zip(*sg_classifiers.metrics))
+        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_met[0])),len(test_debate.post_list))
+        
+        met_dict[prefix] = (len(test_debate.post_list), dm_met, sg_met)
     print('\\subsubsection*{Topic: ' + config.topic + '}')
-    graph_data(config, acc_dict=acc_dict, bar_width=0.5)
+    graph_data(config, met_dict=met_dict, bar_width=0.5)
