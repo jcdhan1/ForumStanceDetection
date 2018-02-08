@@ -126,10 +126,17 @@ class Multiclassifer:
             corr.append(corr_count) #How many are correctly classified as classes[i]
             classed.append(classed_count) #How many are classified as classes[i]
             actual.append(list(self.test_labels).count(self.classes[i])) #How many are actually in classes[i]
-        prc= map(lambda numer,denomin: numer/denomin,zip(corr,classed))
-        rcl= map(lambda numer,denomin: numer/denomin,zip(corr,actual))
-        f1 = map(lambda p,r: 2*p*r/(p+r),zip(prc,rcl))
         
+        
+        prc = []
+        
+        print("correct:", corr)
+        print("classed as:", classed)
+        
+        rcl = []
+        f1  = []
+        
+    
         return (accu,prc,rcl,f1)
     
 def tuplist(d):
@@ -202,7 +209,7 @@ if __name__ == '__main__':
     
     met_dict = dict.fromkeys(subsetAZ)
     
-    print('     Liblinear     |Linear        |Polynomial    |Sigmoid       |Radial Basis Function')
+    print('       Liblinear     |Linear        |Polynomial    |Sigmoid       |Radial Basis Function')
     for prefix in subsetAZ:
         #Training data: files about config.topic that do not begin with the prefix
         train_debates = reader.Debate(config.filepath, prefix, config.topic, True)
@@ -215,10 +222,15 @@ if __name__ == '__main__':
         #Get metrics from multiple SVMs
         dm_classifiers = Multiclassifer(*prepro.distributed_memory())
         dm_met = list(zip(*dm_classifiers.metrics))
-        print(prefix, 'DM', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_met[0])),len(test_debate.post_list))
+        print(prefix, 'DM  ', "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_met[0])),len(test_debate.post_list))
+#        for i in range(1,len(dm_met)):
+#            met_sym = ('prc','rcl',' F1')
+#            for j in range(3):
+#                print('  ','{: 00}'.format(+1),met_sym[j], "|".join(map(lambda sc: str.format('{0:.12f}',sc), dm_met[i][j])))
+#        
         sg_classifiers = Multiclassifer(*prepro.skipgram())
         sg_met = list(zip(*sg_classifiers.metrics))
-        print('  SG',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_met[0])),len(test_debate.post_list))
+        print('  SG  ',"|".join(map(lambda sc: str.format('{0:.12f}',sc), sg_met[0])),len(test_debate.post_list))
         
         met_dict[prefix] = (len(test_debate.post_list), dm_met, sg_met)
     print('\\subsubsection*{Topic: ' + config.topic + '}')
