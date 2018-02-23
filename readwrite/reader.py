@@ -7,6 +7,8 @@
 import os
 import csv
 import re
+import json
+from pprint import pprint
 
 class CommandLine:
     def __init__(self, opts, args):
@@ -152,3 +154,10 @@ if __name__ == '__main__':
     with open('../data/fourforums/annotations/topic.csv') as csvfile:
         topic = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
     #Import author stances
+    #'../data/fourforums/discussions'
+    some_debates=[]
+    for d, t in topic.items():    # for name, age in list.items():  (for Python 3.x)
+        if t == "gun control":
+            data = json.load(open('../data/fourforums/discussions/'+str(d)+'.json'))
+            if "smoking" in data[0][0][3] and "ATF" in data[0][0][3]:
+                print(data[0][0][3])
