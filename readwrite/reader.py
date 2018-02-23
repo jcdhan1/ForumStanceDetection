@@ -5,6 +5,8 @@
 @author: aca15jch
 """
 import os
+import csv
+import re
 
 class CommandLine:
     def __init__(self, opts, args):
@@ -143,3 +145,10 @@ class DebateClass1(Debate):
         :return: The debates's attributes as a string.
         """
         return '\n'.join(["Directory: " + str(self.posts_directory), "Prefix   : " + self.prefix, "Topic    : " + str(self.topic)])
+
+if __name__ == '__main__':
+    #Import topic annotations as dictionary
+    topic={}
+    with open('../data/fourforums/annotations/topic.csv') as csvfile:
+        topic = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
+    #Import author stances
