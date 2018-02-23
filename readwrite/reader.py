@@ -91,13 +91,6 @@ class Debate:
             self.post_list.append(new_post)
         self.post_list.sort(key=lambda p: p.post_id)
     
-    def __str__(self):
-        """
-        Overriden str method
-        :return: The debates's attributes as a string.
-        """
-        return '\n'.join(["Directory: " + str(self.posts_directory), "Prefix   : " + self.prefix, "Topic    : " + str(self.topic)])
-    
     def get_bodies(self):
         return list(map(lambda p: p.body, self.post_list))
     
@@ -108,8 +101,45 @@ class Debate:
         return list(map(lambda p: p.label, self.post_list))
     
     def get_post_ids(self):
-        return list(map(lambda p: p.post_id, self.post_list))   
+        return list(map(lambda p: p.post_id, self.post_list))
+
+class DebateClass1(Debate):
+    def __init__(self, topic="", posts_directory="", prefix='all', exclude=False):
+        """
+        Extended to be specific to CreateDebate files
+        :param posts_directory: Where the .data and .meta files are located.
+        :param prefix: takes values of "all" or the majuscule Latin alphabet (formatted for CreateDebate files).
+        :param exclude: whether to exclude or include files with said prefix.
+        :param topic: the topic of the debate.
+        """
+        self.posts_directory = posts_directory
+        self.prefix = prefix
+        self.topic = topic
+        dataList = list(map(lambda d_file: os.path.join(posts_directory, d_file), filter(lambda d_file:  filefilter(f=d_file, prefix=prefix, exclude=exclude), os.listdir(posts_directory))))
+        dataList.sort()
+        metaList = list(map(lambda m_file: os.path.join(posts_directory, m_file), filter(lambda m_file:  filefilter(m_file, '.meta', prefix, exclude), os.listdir(posts_directory))))
+        metaList.sort()
+        self.post_list=[]
+        for x in range(0, len(dataList)):
+            new_post = Post()
+            with open(dataList[x], encoding="utf8") as fd:
+                new_post.body = fd.read()
+            with open(metaList[x], encoding="utf8") as fd:
+                new_post.post_id=os.path.basename(dataList[x])[:1] + str(int(fd.readline().split("ID=",1)[1]))
+                raw_target=int(fd.readline().split("PID=",1)[1])
+                new_post.target = topic if raw_target==-1 else os.path.basename(dataList[x])[:1] + str(raw_target)
+                raw_stance=fd.readline().split("Stance=",1)[1]
+                if any(char.isdigit() for char in raw_stance):
+                    if int(raw_stance) < 0:
+                        new_post.label = "AGAINST"
+                    elif int(raw_stance) > 0:
+                        new_post.label = "FAVOR"
+            self.post_list.append(new_post)
+        self.post_list.sort(key=lambda p: p.post_id)
     
-    def get_post_tree(self):
-        #TODO: return a tree where edges link one post to another using its target variable
-        return list(map(lambda p: p.target, self.post_list))
+    def __str__(self):
+        """
+        Overriden str method
+        :return: The debates's attributes as a string.
+        """
+        return '\n'.join(["Directory: " + str(self.posts_directory), "Prefix   : " + self.prefix, "Topic    : " + str(self.topic)])

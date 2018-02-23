@@ -3,3 +3,6 @@ data/
 out/
 img/
 twokenize_wrapper/
+preprocess/
+documentation/
+results/
