@@ -4,32 +4,121 @@
 
 @author: aca15jch
 """
+import preprocess
 import os
 import csv
 import re
 import json
-from pprint import pprint
+import random
 
-class CommandLine:
-    def __init__(self, opts, args):
-        p = '-p' in opts
-        t = '-T' in opts
-        if len(args)==2:
-             self.filepath = args[0]
-             self.topic = args[1]
-        if len(args)==1:
-            if t:
-                self.filepath = args[0]
-            if p:
-                self.topic = args[0]
-        #Flags supersede arguments if present
-        if p:
-            self.filepath = opts['-p']
-        if t:
-            self.topic = opts['-T']
-            
+class Reader:
+    def __init__(self, dir_cd,dir_4f):
+        self.dir_cd = dir_cd
+        self.dir_4f = dir_4f
+        #Import 4Forum topic annotations as a dictionary and an inverted dictionary
+        self.topic_dict = {}
+        self.inv_topic_dict = {}
+        with open(dir_4f + 'annotations/topic.csv') as csvfile:
+            self.topic_dict = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
+        self.topic_4f = set(self.topic_dict.values())
+        for tpc in self.topic_4f:
+            file_names = []
+            for k, v in self.topic_dict.items():
+                if v == tpc:
+                    file_names.append(k)
+            self.inv_topic_dict[tpc] = file_names
 
-def filefilter(f="", extension='.data', prefix='all', exclude=False):
+    def load_cd(self, topic_dir="", prefix='', exclude=False):
+        """
+        Load from CreateDebate dataset
+        
+        :param topic_dir       : the directory of the debate to load.
+        :param prefix          : the prefix of the debate to load.
+        :param exclude         : load posts from debates excluding those represented by the prefix.
+        :return                : A Debate object with a post_list consisting only of Post_CD objects.
+        """
+        tpc_dir = topic_dir
+        if not tpc_dir:
+            print('Input | Directory')
+            dir_lst = os.listdir('../data/CreateDebate')
+            tpc_dir = select_opt(dir_lst, 'Select a directory: ')
+        subset_az = ['ALL'] + subsetAZ(self.dir_cd + tpc_dir)
+        pfx = prefix
+        if (not pfx) or (pfx not in subset_az):
+            while (pfx not in subset_az):
+                pfx = input("Select a debate from:\n" + str(subset_az) + "\n").upper()
+        dataList = list(map(lambda d_file: os.path.join(self.dir_cd + tpc_dir, d_file), filter(lambda d_f:  filefilter(f=d_f, prefix=pfx, exclude=exclude), os.listdir(self.dir_cd + tpc_dir))))
+        dataList.sort()
+        metaList = list(map(lambda m_file: os.path.join(self.dir_cd + tpc_dir, m_file), filter(lambda m_f:  filefilter(m_f, '.meta',pfx, exclude), os.listdir(self.dir_cd + tpc_dir))))
+        metaList.sort()
+        post_list=[]
+        for x in range(0, len(dataList)):
+            pfx_actual = os.path.basename(dataList[x])[:1]
+            new_post = preprocess.Post_CD(pfx_actual)
+            with open(dataList[x], encoding="utf8") as fd:
+                new_post.body = fd.read()
+            with open(metaList[x], encoding="utf8") as fd:
+                new_post.post_id=pfx_actual + str(int(fd.readline().split("ID=",1)[1]))
+                raw_target=int(fd.readline().split("PID=",1)[1])
+                new_post.topic = tpc_dir if raw_target==-1 else os.path.basename(dataList[x])[:1] + str(raw_target)
+                raw_stance=fd.readline().split("Stance=",1)[1]
+                if any(char.isdigit() for char in raw_stance):
+                    if int(raw_stance) < 0:
+                        new_post.label = "AGAINST"
+                    elif int(raw_stance) > 0:
+                        new_post.label = "FAVOR"
+            post_list.append(new_post)
+        post_list.sort(key=lambda p: p.post_id)
+        dbt = preprocess.Debate(tpc_dir, post_list)
+        return dbt
+        
+    def load_4f(self):
+        """
+        Load a random post from the 4Forums.com dataset and prompt the user to classify it.
+        
+        :return: A Post object.
+        """
+        print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))
+        lst = list(self.topic_4f)
+        selected_topic = select_opt(lst,'Select a topic: ',self.inv_topic_dict)
+        fn = random.choice(self.inv_topic_dict[selected_topic])
+        raw_debate = json.load(open(self.dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
+        raw_post = random.choice(raw_debate)
+        post_id = str(raw_post[0])
+        body = raw_post[3]
+        #If a post_title exists (stored in a dictionary), it may contain an opinion, hence it is concatenated with the body
+        maybe_dict = raw_post[4]
+        if 'post_info' in maybe_dict:
+            post_info = maybe_dict['post_info']
+            if 'post_title' in post_info:
+                body = post_info['post_title'] + '\n' + body
+        print(body)
+        stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
+        return preprocess.Post(body, stance, post_id, selected_topic)
+
+def select_opt(opt,prompt,dct=""):
+    for i in range(len(opt)):
+        formatting=("{:<5d} | {:<23s}" + (" | {:>12d}" if dct else ""))
+        print(formatting.format(i+1, opt[i], len(dct[opt[i]])) if dct else formatting.format(i+1, opt[i]))
+    return opt[input_int(prompt,0,len(opt))-1]
+    
+
+def input_int(prompt, lower,upper):
+    while True:
+        try:
+            value = int(input(prompt))
+        except ValueError:
+            print("Sorry, I didn't understand that.")
+            continue
+
+        if value < lower or value > upper:
+            print("Sorry, your response is out of bounds.")
+            continue
+        else:
+            break
+    return value
+
+def filefilter(f="", extension='.data', prefix='ALL', exclude=False):
     """
     Filter files by prefix or extension
     :param f        : the file name
@@ -38,126 +127,28 @@ def filefilter(f="", extension='.data', prefix='all', exclude=False):
     :param exclude  : if true, do not return true for files with the prefix
     :return: True if it matches the conditions
     """
-    return f.endswith(extension) and (prefix=='all' or (f.startswith(prefix) != exclude))
+    return f.endswith(extension) and (prefix=='ALL' or (f.startswith(prefix) != exclude))
 
-class Post:
-    def __init__(self, body="", label="NONE", post_id=None, target=-1):
-        """
-        Constructor for Post object.
-        :param body: the post's text body.
-        :param label: takes values of "AGAINST", "NONE", or "FAVOR"
-        :param post_id: a number uniquely identifying the post.
-        :param target: Either the post_id of another post that this post responds to or the the number -1.
-        """
-        self.body = body
-        self.label = label
-        self.post_id = post_id
-        self.target = target
-    
-    def __str__(self):
-        """
-        Overriden str method
-        :return: The post's attributes as a string.
-        """
-        return '\n'.join(["Label  : " + self.label, "Post ID: " + str(self.post_id), "Target : " +  str(self.target), "Body   :\n" +  self.body])
-
-class Debate:
-    def __init__(self, posts_directory="", prefix='all', topic="", exclude=False):
-        """
-        Constructor for Debate object.
-        :param posts_directory: Where the .data and .meta files are located.
-        :param prefix: takes values of "all" or the majuscule Latin alphabet (formatted for CreateDebate files).
-        :param exclude: whether to exclude or include files with said prefix.
-        :param topic: the topic of the debate.
-        """
-        self.posts_directory = posts_directory
-        self.prefix = prefix
-        self.topic = topic
-        dataList = list(map(lambda d_file: os.path.join(posts_directory, d_file), filter(lambda d_file:  filefilter(f=d_file, prefix=prefix, exclude=exclude), os.listdir(posts_directory))))
-        dataList.sort()
-        metaList = list(map(lambda m_file: os.path.join(posts_directory, m_file), filter(lambda m_file:  filefilter(m_file, '.meta', prefix, exclude), os.listdir(posts_directory))))
-        metaList.sort()
-        self.post_list=[]
-        for x in range(0, len(dataList)):
-            new_post = Post()
-            with open(dataList[x], encoding="utf8") as fd:
-                new_post.body = fd.read()
-            with open(metaList[x], encoding="utf8") as fd:
-                new_post.post_id=os.path.basename(dataList[x])[:1] + str(int(fd.readline().split("ID=",1)[1]))
-                raw_target=int(fd.readline().split("PID=",1)[1])
-                new_post.target = topic if raw_target==-1 else os.path.basename(dataList[x])[:1] + str(raw_target)
-                raw_stance=fd.readline().split("Stance=",1)[1]
-                if any(char.isdigit() for char in raw_stance):
-                    if int(raw_stance) < 0:
-                        new_post.label = "AGAINST"
-                    elif int(raw_stance) > 0:
-                        new_post.label = "FAVOR"
-            self.post_list.append(new_post)
-        self.post_list.sort(key=lambda p: p.post_id)
-    
-    def get_bodies(self):
-        return list(map(lambda p: p.body, self.post_list))
-    
-    def get_targets(self):
-        return list(map(lambda p: p.target, self.post_list))
-    
-    def get_labels(self):
-        return list(map(lambda p: p.label, self.post_list))
-    
-    def get_post_ids(self):
-        return list(map(lambda p: p.post_id, self.post_list))
-
-class DebateClass1(Debate):
-    def __init__(self, topic="", posts_directory="", prefix='all', exclude=False):
-        """
-        Extended to be specific to CreateDebate files
-        :param posts_directory: Where the .data and .meta files are located.
-        :param prefix: takes values of "all" or the majuscule Latin alphabet (formatted for CreateDebate files).
-        :param exclude: whether to exclude or include files with said prefix.
-        :param topic: the topic of the debate.
-        """
-        self.posts_directory = posts_directory
-        self.prefix = prefix
-        self.topic = topic
-        dataList = list(map(lambda d_file: os.path.join(posts_directory, d_file), filter(lambda d_file:  filefilter(f=d_file, prefix=prefix, exclude=exclude), os.listdir(posts_directory))))
-        dataList.sort()
-        metaList = list(map(lambda m_file: os.path.join(posts_directory, m_file), filter(lambda m_file:  filefilter(m_file, '.meta', prefix, exclude), os.listdir(posts_directory))))
-        metaList.sort()
-        self.post_list=[]
-        for x in range(0, len(dataList)):
-            new_post = Post()
-            with open(dataList[x], encoding="utf8") as fd:
-                new_post.body = fd.read()
-            with open(metaList[x], encoding="utf8") as fd:
-                new_post.post_id=os.path.basename(dataList[x])[:1] + str(int(fd.readline().split("ID=",1)[1]))
-                raw_target=int(fd.readline().split("PID=",1)[1])
-                new_post.target = topic if raw_target==-1 else os.path.basename(dataList[x])[:1] + str(raw_target)
-                raw_stance=fd.readline().split("Stance=",1)[1]
-                if any(char.isdigit() for char in raw_stance):
-                    if int(raw_stance) < 0:
-                        new_post.label = "AGAINST"
-                    elif int(raw_stance) > 0:
-                        new_post.label = "FAVOR"
-            self.post_list.append(new_post)
-        self.post_list.sort(key=lambda p: p.post_id)
-    
-    def __str__(self):
-        """
-        Overriden str method
-        :return: The debates's attributes as a string.
-        """
-        return '\n'.join(["Directory: " + str(self.posts_directory), "Prefix   : " + self.prefix, "Topic    : " + str(self.topic)])
+def subsetAZ(filepath):
+    """
+    Although printing the set will show the letters sorted, the letters are not accessed in order when
+    the set's converted to a list or used in a for-loop hence it must be converted to a list and then sorted.
+    """
+    subset_az = list(set(map(lambda f: f[0], os.listdir(filepath))))
+    subset_az.sort()
+    return subset_az
 
 if __name__ == '__main__':
-    #Import topic annotations as dictionary
-    topic={}
-    with open('../data/fourforums/annotations/topic.csv') as csvfile:
-        topic = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
-    #Import author stances
-    #'../data/fourforums/discussions'
-    some_debates=[]
-    for d, t in topic.items():    # for name, age in list.items():  (for Python 3.x)
-        if t == "gun control":
-            data = json.load(open('../data/fourforums/discussions/'+str(d)+'.json'))
-            if "smoking" in data[0][0][3] and "ATF" in data[0][0][3]:
-                print(data[0][0][3])
+    #Instantiate a Reader
+    reader = Reader('../data/CreateDebate/', '../data/fourforums/')
+    #Load a debate from the CreateDebate dataset that the user has been prompted to select.
+    dbt = reader.load_cd()
+    #Load a random post from the 4Forums.com dataset and prompt the user to classify it.
+    pst = reader.load_4f()
+    
+    print("Learn from these:")
+    for p in dbt.post_list:
+        print(p)
+    
+    print("Classify this:")
+    print(pst)

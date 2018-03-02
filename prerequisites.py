@@ -11,5 +11,7 @@ if list(filter(lambda p: 'twokenize_wrapper' in p, sys.path))==[]:
     sys.path.append(os.path.abspath('./twokenize_wrapper'))
 if list(filter(lambda p: 'readwrite' in p, sys.path))==[]:
     sys.path.append(os.path.abspath('./readwrite'))
+if list(filter(lambda p: 'preprocess' in p, sys.path))==[]:
+    sys.path.append(os.path.abspath('./preprocess'))
 print(sys.path)
 nltk.download()
