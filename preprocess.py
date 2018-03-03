@@ -13,7 +13,8 @@ from twokenize_wrapper.twokenize import tokenize
 class Post:
     def __init__(self, body="", label="NONE", post_id=None, topic=""):
         """
-        Constructor for Post object.
+        Constructor for Post.
+        
         :param body: the post's text body.
         :param label: takes values of "AGAINST", "NONE", or "FAVOR".
         :param post_id: a number uniquely identifying the post.
@@ -28,6 +29,7 @@ class Post:
     def __str__(self):
         """
         Overriden str method
+        
         :return: The post's attributes as a string.
         """
         rtn0 = '\n'.join(["Label  : " + self.label, "Post ID: " + str(self.post_id)])
@@ -38,17 +40,20 @@ class Post:
         return rtn0 + '\n' + '\n'.join(["Topic  : " +  str(self.topic), "Body   :\n" +  self.body])
 
 class Post_CD(Post):
-    #Extended specifically for CreateDebate
     def __init__(self, prefix, body="", label="NONE", post_id=None, topic=""):
+        """
+        Constructor for a subclass specific for CreateDebate
         
+        :param prefix: The filename of the .data and .meta files it is sourced from.
+        """
         super(Post_CD, self).__init__(body,label,post_id,topic)
         self.prefix = prefix
         
 class Debate:
-    #A collection of posts with the same topic.
     def __init__(self, topic="", post_list=[]):
         """
-        Constructor for Debate object.
+        Constructor for Debate, a collection of posts with the same topic.
+        
         :param topic: the topic of the debate.
         :param post_list: the posts in the debate.
         """

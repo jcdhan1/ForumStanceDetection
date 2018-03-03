@@ -13,6 +13,12 @@ import random
 
 class Reader:
     def __init__(self, dir_cd,dir_4f):
+        """
+        Constructor for Reader.
+        
+        :param dir_cd: the directory of the CreateDebate files.
+        :param dir_4f: the directory of the 4Forum.com files.
+        """
         self.dir_cd = dir_cd
         self.dir_4f = dir_4f
         #Import 4Forum topic annotations as a dictionary and an inverted dictionary
@@ -32,10 +38,10 @@ class Reader:
         """
         Load from CreateDebate dataset
         
-        :param topic_dir       : the directory of the debate to load.
-        :param prefix          : the prefix of the debate to load.
-        :param exclude         : load posts from debates excluding those represented by the prefix.
-        :return                : A Debate object with a post_list consisting only of Post_CD objects.
+        :param topic_dir: the directory of the debate to load.
+        :param prefix   : the prefix of the debate to load.
+        :param exclude  : load posts from debates excluding those represented by the prefix.
+        :return         : A Debate object with a post_list consisting only of Post_CD objects.
         """
         tpc_dir = topic_dir
         if not tpc_dir:
@@ -72,15 +78,18 @@ class Reader:
         dbt = preprocess.Debate(tpc_dir, post_list)
         return dbt
         
-    def load_4f(self):
+    def load_4f(self, unseen_target = ""):
         """
         Load a random post from the 4Forums.com dataset and prompt the user to classify it.
         
-        :return: A Post object.
+        :param unseen_target: The topic of the post.
+        :return             : A Post object.
         """
-        print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))
         lst = list(self.topic_4f)
-        selected_topic = select_opt(lst,'Select a topic: ',self.inv_topic_dict)
+        selected_topic = unseen_target
+        if selected_topic not in lst:
+            print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))
+            selected_topic = select_opt(lst,'Select a topic: ',self.inv_topic_dict)
         fn = random.choice(self.inv_topic_dict[selected_topic])
         raw_debate = json.load(open(self.dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
         raw_post = random.choice(raw_debate)
@@ -97,6 +106,14 @@ class Reader:
         return preprocess.Post(body, stance, post_id, selected_topic)
 
 def select_opt(opt,prompt,dct=""):
+    """
+    Prompts the user to select a value from a list.
+    
+    :param opt   : the options.
+    :param prompt: The prompt string.
+    :param dct   : display an optional third column
+    :return      : What the user selected from opt.
+    """
     for i in range(len(opt)):
         formatting=("{:<5d} | {:<23s}" + (" | {:>12d}" if dct else ""))
         print(formatting.format(i+1, opt[i], len(dct[opt[i]])) if dct else formatting.format(i+1, opt[i]))
@@ -104,6 +121,14 @@ def select_opt(opt,prompt,dct=""):
     
 
 def input_int(prompt, lower,upper):
+    """
+    Forces an input to be an integer between two values.
+    
+    :param prompt: The prompt string.
+    :param lower : The lowest integer allowed.
+    :param upper : The greatest integer allowed.
+    :return      : An int between lower and greater.
+    """
     while True:
         try:
             value = int(input(prompt))
@@ -121,11 +146,12 @@ def input_int(prompt, lower,upper):
 def filefilter(f="", extension='.data', prefix='ALL', exclude=False):
     """
     Filter files by prefix or extension
+    
     :param f        : the file name
     :param extension: the extension
     :param prefix   : the prefix
     :param exclude  : if true, do not return true for files with the prefix
-    :return: True if it matches the conditions
+    :return         : True if it matches the conditions
     """
     return f.endswith(extension) and (prefix=='ALL' or (f.startswith(prefix) != exclude))
 
@@ -133,6 +159,9 @@ def subsetAZ(filepath):
     """
     Although printing the set will show the letters sorted, the letters are not accessed in order when
     the set's converted to a list or used in a for-loop hence it must be converted to a list and then sorted.
+    
+    :param filepath: A subdirectory in one of the CreateDebate topic directories.
+    :return        : The distinct letters files have.
     """
     subset_az = list(set(map(lambda f: f[0], os.listdir(filepath))))
     subset_az.sort()
@@ -140,11 +169,11 @@ def subsetAZ(filepath):
 
 if __name__ == '__main__':
     #Instantiate a Reader
-    reader = Reader('../data/CreateDebate/', '../data/fourforums/')
+    rdr = Reader('../data/CreateDebate/', '../data/fourforums/')
     #Load a debate from the CreateDebate dataset that the user has been prompted to select.
-    dbt = reader.load_cd()
+    dbt = rdr.load_cd()
     #Load a random post from the 4Forums.com dataset and prompt the user to classify it.
-    pst = reader.load_4f()
+    pst = rdr.load_4f()
     
     print("Learn from these:")
     for p in dbt.post_list:
