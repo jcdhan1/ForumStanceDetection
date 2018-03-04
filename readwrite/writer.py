@@ -4,7 +4,6 @@ Created on Fri Mar  2 15:28:40 2018
 
 @author: aca15jch
 """
-
 import preprocess, nltk, reader
 from gensim import utils
 from gensim.models import Word2Vec
@@ -27,7 +26,7 @@ class Writer:
         :param num_workers : the number of workers
         :param num_features: the number of features
         """
-        #Tokenise
+        #Tokenise the post bodies in the training data
         tokenized_posts = list(map(lambda p: filterStopwords(tokenize(p.body.lower())),self.train_data.post_list))
         #Vectorise
         model_sg = Word2Vec(sentences=tokenized_posts,
@@ -96,13 +95,16 @@ if __name__ == '__main__':
     seen_target = "marijuana"
     unseen_target = "marijuana legalization"
     
+    #Load posts from both data-sets
     a_dbt = rdr.load_cd(seen_target, 'A')
     not_a_dbt = rdr.load_cd(seen_target, 'A', True)
     all_marijuana = rdr.load_cd(seen_target, "ALL")
     rndm_dbt = rdr.load_4f(unseen_target)
     
+    #Instantiate a Writer_X1 and generate an .sgv file
     ex1gen = Writer_X1(not_a_dbt, a_dbt, "../out/", "marijuana", "A")
     ex1gen.skipgram(15,4,151)
     
+    #Instantiate a Writer_X2 and generate an .sgv file
     ex2gen = Writer_X2(all_marijuana, preprocess.Debate(unseen_target, [rndm_dbt]), "../out/")
     ex2gen.skipgram(15,4,151)

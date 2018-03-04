@@ -1,14 +1,9 @@
-"""\
-------------------------------------------------------------
-USE: python <PROGNAME> (options) (directory, debate identifier or topic)
-OPTIONS:
-    --help   , -h       : print this help message
-------------------------------------------------------------
+# -*- coding: utf-8 -*-
 """
-import os, sys, getopt, re, random, nltk
-from gensim.models import Doc2Vec, Word2Vec
-from gensim.models.doc2vec import TaggedDocument
-from twokenize_wrapper.twokenize import tokenize
+Created on Fri Mar  2 23:18:33 2018
+
+@author: aca15jch
+"""
 
 class Post:
     def __init__(self, body="", label="NONE", post_id=None, topic=""):
