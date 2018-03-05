@@ -5,7 +5,7 @@ Created on Sun Mar  4 19:38:20 2018
 @author: aca15jch
 """
 import numpy as np
-import writer, preprocess
+import reader, writer, preprocess, os
 from twokenize_wrapper.twokenize import tokenize
 from gensim.models import Word2Vec
 from sklearn.preprocessing import scale
@@ -71,3 +71,9 @@ class Experiment2(Experiment):
         self.dir_4f = dir_4f
         self.seen_target = seen_target
         self.unseen_target = unseen_target
+    
+if __name__ == '__main__':
+    #Experiment 1:
+    dir_cd = input("Where are the posts from CreateDebate stored?")
+    topic = reader.select_topic(dir_cd)
+    

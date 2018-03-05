@@ -45,9 +45,7 @@ class Reader:
         """
         tpc_dir = topic_dir
         if not tpc_dir:
-            print('Input | Directory')
-            dir_lst = os.listdir('../data/CreateDebate')
-            tpc_dir = select_opt(dir_lst, 'Select a directory: ')
+            tpc_dir = select_topic(self.dir_cd)
         subset_az = ['ALL'] + subsetAZ(self.dir_cd + tpc_dir)
         pfx = prefix
         if (not pfx) or (pfx not in subset_az):
@@ -104,6 +102,12 @@ class Reader:
         print(body)
         stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
         return preprocess.Post(body, stance, post_id, selected_topic)
+
+def select_topic(directory):
+    print('Input | Directory')
+    dir_lst = os.listdir(directory)
+    topic = select_opt(dir_lst, 'Select a topic: ')
+    return topic
 
 def select_opt(opt,prompt,dct=""):
     """
