@@ -10,7 +10,7 @@ import csv
 import re
 import json
 import random
-
+      
 class Reader:
     def __init__(self, dir_cd,dir_4f):
         """
@@ -27,12 +27,7 @@ class Reader:
         with open(dir_4f + 'annotations/topic.csv') as csvfile:
             self.topic_dict = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
         self.topic_4f = set(self.topic_dict.values())
-        for tpc in self.topic_4f:
-            file_names = []
-            for k, v in self.topic_dict.items():
-                if v == tpc:
-                    file_names.append(k)
-            self.inv_topic_dict[tpc] = file_names
+        self.inv_topic_dict=dict_inv(self.topic_dict,self.topic_4f)
 
     def load_cd(self, topic_dir="", prefix='', exclude=False):
         """
@@ -102,6 +97,23 @@ class Reader:
         print(body)
         stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
         return preprocess.Post(body, stance, post_id, selected_topic)
+
+def dict_inv(dct, kset=None):
+    """
+    Invert a dictionary.
+    
+    :param dct : Dictionary to invert.
+    :param kset: Set of keys (optional)
+    :return    : a dictionary where the new values are list of the previous keys.
+    """
+    inv_dict = {}
+    for tpc in (kset if kset else set(dct.values())):
+            new_values = []
+            for k, v in dct.items():
+                if v == tpc:
+                    new_values.append(k)
+            inv_dict[tpc] = new_values
+    return inv_dict
 
 def select_topic(directory):
     print('Input | Directory')
