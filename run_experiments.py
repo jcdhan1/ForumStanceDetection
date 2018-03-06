@@ -8,6 +8,7 @@ import numpy as np
 import reader, writer, preprocess, os
 from twokenize_wrapper.twokenize import tokenize
 from gensim.models import Word2Vec
+from sklearn import svm
 from sklearn.preprocessing import scale
 
 class Model_Wrapper:
@@ -73,7 +74,13 @@ class Experiment2(Experiment):
         self.unseen_target = unseen_target
     
 if __name__ == '__main__':
+    classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
+    classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
+    classifier_dict = dict(zip(classifier_names, classifiers))
+    
     #Experiment 1:
     dir_cd = input("Where are the posts from CreateDebate stored?")
     topic = reader.select_topic(dir_cd)
-    
+    img_path = input("Where shuld graphs be exported to?")
+    classifier1 = classifier_dict[reader.select(classifier_names)]
+    experiment1 = Experiment1(classifier1,img_path,dir_cd,topic)
