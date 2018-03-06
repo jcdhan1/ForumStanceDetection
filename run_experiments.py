@@ -37,30 +37,40 @@ class Model_Wrapper:
         return list(map(lambda p: self.stance_dict[p.label], debate.post_list))
     
 class Experiment:
-    def __init__(self, classifier, img_path, dir_cd):
+    def __init__(self, classifier, out_path, img_path, dir_cd):
         """
         Constructor for an Experiment.
         
         :param classifier: the classifier, can be an instance svm.LinearSVC, sklearn.svm.SVC or one of the LSTM subclasses.
+        :param out_path  : where to export files for word vector models.
         :param img_path  : where to export the evaluation graphs.
         :param dir_cd    : the directory of the CreateDebate files (training data).
         """
         self.classifier = classifier
+        self.out_path = out_path
         self.img_path = img_path
         self.dir_cd = dir_cd
 
 class Experiment1(Experiment):
-    def __init__(self, classifier, img_path, dir_cd, topic):
+    def __init__(self, classifier, out_path, img_path, dir_cd, topic):
         """
         A subclass of Experiment specifically for experiment setup 1.
         
         :param topic: The topic of all posts in the data-set.
         """
-        super(Experiment1, self).__init__(classifier,img_path,img_path, dir_cd)
+        super(Experiment1, self).__init__(classifier, out_path, img_path, dir_cd)
         self.topic = topic
+    
+    def run(self, rdr):
+        #Test on one debate, train on every other debate. Loop for all debates for the given topic.
+        for prefix in reader.subsetAZ(self.dir_cd + self.topic):
+            train_data = rdr.load_cd(topic, prefix, True)
+            test_data = rdr.load_cd(topic, prefix)
+            wvm_gen = writer.Writer_X1(train_data, test_data, self.out_path, self.topic, prefix)
+            wvm_gen.skipgram(15,4,151)
 
 class Experiment2(Experiment):
-    def __init__(self, classifier, img_path, dir_cd, dir_4f, seen_target, unseen_target):
+    def __init__(self, classifier, out_path, img_path, dir_cd, dir_4f, seen_target, unseen_target):
         """
         A subclass of Experiment specifically for experiment setup 2.
         
@@ -68,7 +78,7 @@ class Experiment2(Experiment):
         :param seen_target  : the topic of the training data.
         :param unseen_target: the topic of the testing data.
         """
-        super(Experiment2, self).__init__(classifier,img_path,img_path, dir_cd)
+        super(Experiment2, self).__init__(classifier, out_path, img_path, dir_cd)
         self.dir_4f = dir_4f
         self.seen_target = seen_target
         self.unseen_target = unseen_target
@@ -78,9 +88,14 @@ if __name__ == '__main__':
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
     classifier_dict = dict(zip(classifier_names, classifiers))
     
-    #Experiment 1:
-    dir_cd = input("Where are the posts from CreateDebate stored?")
+
+    dir_cd = input("Where are the posts from CreateDebate stored?") #./data/CreateDebate/
+    dir_4f = input("Where are the posts from FourForums stored?") #./data/fourforums/
     topic = reader.select_topic(dir_cd)
-    img_path = input("Where shuld graphs be exported to?")
-    classifier1 = classifier_dict[reader.select(classifier_names)]
-    experiment1 = Experiment1(classifier1,img_path,dir_cd,topic)
+    out_path = input("Where files for word vector models be exported to?") #./out/experiment_1/
+    img_path = input("Where should graphs be exported to?") #./img/experiment_1/
+    rdr = reader.Reader(dir_cd, dir_4f)
+    
+    #Experiment 1
+    classifier1 = classifier_dict[reader.select_opt(classifier_names, "Select a classifier:")]
+    experiment1 = Experiment1(classifier1,out_path,img_path,dir_cd,topic)

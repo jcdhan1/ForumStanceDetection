@@ -56,7 +56,7 @@ class Writer_X1(Writer):
         """
         Models for experiment setup 1 are saved in the directory experiment_1 and a subdirectory named after the topic. The prefix of the testing data is the filename.
         """
-        model.save(self.out_path + 'experiment_1/' + self.train_data.topic + '/' + self.prefix + extension)
+        model.save(self.out_path + self.train_data.topic + '/' + self.prefix + extension)
         
 class Writer_X2(Writer):
     def __init__(self, train_data, test_data, out_path):
@@ -72,7 +72,7 @@ class Writer_X2(Writer):
         """
         Models for experiment setup 2 are saved in directory experiment_2 as a file named after the seen target.
         """
-        model.save(self.out_path + 'experiment_2/' + self.train_data.topic + extension)
+        model.save(self.out_path + self.train_data.topic + extension)
 
 def filterStopwords(tokenised_body):
     """
@@ -102,9 +102,9 @@ if __name__ == '__main__':
     rndm_dbt = rdr.load_4f(unseen_target)
     
     #Instantiate a Writer_X1 and generate an .sgv file
-    ex1gen = Writer_X1(not_a_dbt, a_dbt, "../out/", "marijuana", "A")
+    ex1gen = Writer_X1(not_a_dbt, a_dbt, "../out/experiment_1/", "marijuana", "A")
     ex1gen.skipgram(15,4,151)
     
     #Instantiate a Writer_X2 and generate an .sgv file
-    ex2gen = Writer_X2(all_marijuana, preprocess.Debate(unseen_target, [rndm_dbt]), "../out/")
+    ex2gen = Writer_X2(all_marijuana, preprocess.Debate(unseen_target, [rndm_dbt]), "../out/experiment_2/")
     ex2gen.skipgram(15,4,151)
