@@ -83,11 +83,7 @@ class Reader:
         :param unseen_target: The topic of the post.
         :return             : A Post object.
         """
-        lst = list(self.topic_4f)
-        selected_topic = unseen_target
-        if selected_topic not in lst:
-            print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))
-            selected_topic = select_opt(lst,'Select a topic: ',self.inv_topic_dict)
+        selected_topic = self.select_target(unseen_target)
         fn = random.choice(self.inv_topic_dict[selected_topic])
         raw_debate = json.load(open(self.dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
         raw_post = random.choice(raw_debate)
@@ -102,6 +98,14 @@ class Reader:
         print(body)
         stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
         return preprocess.Post(body, stance, post_id, selected_topic)
+    
+    def select_target(self, given_target):
+        lst = list(self.topic_4f)
+        if given_target not in lst:
+            print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))
+            return select_opt(lst,'Select a topic: ',self.inv_topic_dict)
+        else:
+            return given_target
 
 def select_topic(directory):
     print('Input | Directory')
