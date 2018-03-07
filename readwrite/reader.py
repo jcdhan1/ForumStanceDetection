@@ -99,7 +99,7 @@ class Reader:
         stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
         return preprocess.Post(body, stance, post_id, selected_topic)
     
-    def select_target(self, given_target):
+    def select_target(self, given_target=''):
         lst = list(self.topic_4f)
         if given_target not in lst:
             print("{:<5s} | {:<23s} | {:>12s}".format('Input','Topic','# of Debates'))

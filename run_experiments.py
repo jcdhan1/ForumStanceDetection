@@ -102,11 +102,20 @@ if __name__ == '__main__':
     dir_4f = './data/fourforums/' #input("Where are the posts from 4Forums.com stored?") #./data/fourforums/
     rdr = reader.Reader(dir_cd, dir_4f)
     
-    #Experiment 1
-    out_path = './out/experiment_1/' #input("Where should the files for word vector models be exported to?") #./out/experiment_1/
-    img_path = './img/experiment_1/' #input("Where should graphs be exported to?") #./img/experiment_1/
-    topic = reader.select_topic(dir_cd)
-    #New instance of one of the classifier classes in the dictionary
-    classifier1 = copy.deepcopy(classifier_dict[reader.select_opt(classifier_names, "Select a classifier:")]) 
-    experiment1 = Experiment1(classifier1,out_path,img_path,dir_cd,topic)
-    experiment1.run(rdr)
+    if reader.select_opt(['setup 1','setup 2'],'Select an experiment setup:') == 'setup 1':
+        #Experiment 1
+        out_path = './out/experiment_1/' #input("Where should the files for word vector models be exported to?") #./out/experiment_1/
+        img_path = './img/experiment_1/' #input("Where should graphs be exported to?") #./img/experiment_1/
+        topic = reader.select_topic(dir_cd)
+        #New instance of one of the classifier classes in the dictionary
+        classifier1 = copy.deepcopy(classifier_dict[reader.select_opt(classifier_names, "Select a classifier:")]) 
+        experiment1 = Experiment1(classifier1,out_path,img_path,dir_cd,topic)
+        experiment1.run(rdr)
+    else:
+        #Experiment 2
+        out_path = './out/experiment_2/' #input("Where should the files for word vector models be exported to?") #./out/experiment_2/
+        img_path = './img/experiment_2/' #input("Where should graphs be exported to?") #./img/experiment_2/
+        seen_target = reader.select_topic(dir_cd)
+        unseen_target = rdr.select_target()
+        classifier2 = copy.deepcopy(classifier_dict[reader.select_opt(classifier_names, "Select a classifier:")]) 
+        experiment2 = Experiment2(classifier2,out_path,img_path,dir_cd,dir_4f,seen_target,unseen_target)
