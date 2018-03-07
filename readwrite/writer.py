@@ -17,8 +17,9 @@ class Writer:
         self.train_data = train_data
         self.test_data = test_data
         self.out_path = out_path
+        self.model = None
     
-    def skipgram(self, context, num_workers, num_features):
+    def skipgram(self, context, num_workers, num_features, save=False):
         """
         Generate a skip-gram file.
         
@@ -38,7 +39,11 @@ class Writer:
                         workers=num_workers,
                         sg=1)
         #Where the model is saved to depends on the experiment setup; which subclass the object is an instance of.
-        self.save_model(model_sg, '.sgv')
+        self.model = model_sg
+        if save:
+            self.save_model(model_sg, '.sgv')
+        else:
+            return model_sg
         
 class Writer_X1(Writer):
     def __init__(self, train_data, test_data, out_path, topic, prefix):
