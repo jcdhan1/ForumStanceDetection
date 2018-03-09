@@ -5,7 +5,7 @@ Created on Sun Mar  4 19:38:20 2018
 @author: aca15jch
 """
 import numpy as np
-import reader, writer, preprocess, os, copy
+import reader, writer, preprocess, os, copy, tabulate
 from twokenize_wrapper.twokenize import tokenize
 from gensim.models import Word2Vec
 from sklearn import svm, datasets
@@ -64,6 +64,8 @@ class Experiment1(Experiment):
     
     def run(self, rdr):
         #Test on one debate, train on every other debate. Loop for all debates for the given topic.
+        accs = []
+        max_props = []
         for prefix in reader.subsetAZ(self.dir_cd + self.topic):
             print("Generating model")
             train_data = rdr.load_cd(topic, prefix, True)
@@ -77,8 +79,35 @@ class Experiment1(Experiment):
             print("Training on", topic, "debates except for", prefix)
             self.classifier.fit(train_arrays,train_labels)
             print("Testing on", topic, "debate", prefix)
-            print("Accuracy:", self.classifier.score(test_arrays, test_labels))
-
+            
+            # Evaluation Metrics
+            accuracy = self.classifier.score(test_arrays, test_labels)
+            accs += [accuracy]
+            print("Accuracy:", accuracy)
+            predicted = list(self.classifier.predict(test_arrays))
+            metrics=[]
+            
+            proportions=[]
+            for stance, n in STANCES.items():
+                #Avoid division by zero if testing data doesn't have the stance
+                numerator = correctness(test_labels,predicted, n)
+                denominator1 = predicted.count(n)
+                denominator2 = test_labels.count(n)
+                precision = numerator/denominator1 if denominator1 > 0 else "n/a"
+                recall = numerator/denominator2 if denominator2 > 0 else "n/a"
+                f_measure = "n/a"
+                if denominator1 > 0 and denominator2 > 0:
+                    f_measure = 2*precision*recall
+                    if precision+recall > 0:
+                        f_measure = f_measure/(precision+recall)
+                proportion = train_labels.count(n)/len(train_labels)
+                proportions+=[proportion]
+                metrics +=[[stance, precision, recall, f_measure, proportion]]
+            max_props += [max(proportions)]
+            print(tabulate.tabulate(metrics, ['Stance', 'Precision', 'Recall', 'F-measure', 'Training Proportion'], tablefmt="plain"))
+        print("Mean accuracy:", np.mean(accs))
+        print("# of times accuracy greater than proportion of most common training stance:", sum([x[0]>x[1] for x in zip(accs,max_props)]))
+    
 class Experiment2(Experiment):
     def __init__(self, classifier, out_path, img_path, dir_cd, dir_4f, seen_target, unseen_target):
         """
@@ -107,8 +136,10 @@ class Experiment2(Experiment):
         self.classifier.fit(train_arrays,train_labels)
         print("Testing on", unseen_target, "debate", rdm_dbt.post_id)
         print("Accuracy:", self.classifier.score(test_arrays, test_labels))
-        
-    
+
+def correctness(actual, predicted, class_n):
+    return sum([(x[0]==x[1] and x[0]==class_n) for x in zip(actual, predicted)])
+
 if __name__ == '__main__':
     classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
