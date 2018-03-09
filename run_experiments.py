@@ -8,14 +8,15 @@ import numpy as np
 import reader, writer, preprocess, os, copy
 from twokenize_wrapper.twokenize import tokenize
 from gensim.models import Word2Vec
-from sklearn import svm
+from sklearn import svm, datasets
 from sklearn.preprocessing import scale
+
+STANCES = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
 
 class Model_Wrapper:
     def __init__(self, model):
         #self.filepath = filepath
         self.model = model #Word2Vec.load(filepath)
-        self.stance_dict = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
     
     def vectorise_body(self, tokenised_body):
         v_of_vectors = np.zeros(self.model.layer1_size).reshape((1, self.model.layer1_size))
@@ -34,7 +35,7 @@ class Model_Wrapper:
         return scale(np.concatenate(list(map(lambda p: self.vectorise_body(writer.filterStopwords(tokenize(p.body.lower()))),debate.post_list))))
     
     def stance_to_int(self, debate):
-        return list(map(lambda p: self.stance_dict[p.label], debate.post_list))
+        return list(map(lambda p: STANCES[p.label], debate.post_list))
     
 class Experiment:
     def __init__(self, classifier, out_path, img_path, dir_cd):
@@ -92,6 +93,22 @@ class Experiment2(Experiment):
         self.seen_target = seen_target
         self.unseen_target = unseen_target
     
+    def run(self, rdr):
+        train_data = rdr.load_cd(self.seen_target,'ALL')
+        rdm_dbt = rdr.load_4f(unseen_target)
+        test_data = preprocess.Debate(unseen_target, [rdm_dbt])
+        wvm_gen = writer.Writer_X2(train_data, test_data, self.out_path)
+        wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
+        train_arrays = wvmodel.vectorise_debate(train_data)
+        test_arrays  = wvmodel.vectorise_debate(test_data)
+        train_labels = wvmodel.stance_to_int(train_data)
+        test_labels = wvmodel.stance_to_int(test_data)
+        print("Training on all", seen_target, "debates")
+        self.classifier.fit(train_arrays,train_labels)
+        print("Testing on", unseen_target, "debate", rdm_dbt.post_id)
+        print("Accuracy:", self.classifier.score(test_arrays, test_labels))
+        
+    
 if __name__ == '__main__':
     classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
@@ -119,3 +136,4 @@ if __name__ == '__main__':
         unseen_target = rdr.select_target()
         classifier2 = copy.deepcopy(classifier_dict[reader.select_opt(classifier_names, "Select a classifier:")]) 
         experiment2 = Experiment2(classifier2,out_path,img_path,dir_cd,dir_4f,seen_target,unseen_target)
+        experiment2.run(rdr)
