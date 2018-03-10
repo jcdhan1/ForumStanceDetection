@@ -12,19 +12,50 @@ import json
 import random
 
 class Reader:
-    def __init__(self, dir_cd,dir_4f):
+    def __init__(self, __dir_cd,__dir_4f=''):
         """
         Constructor for Reader.
         
-        :param dir_cd: the directory of the CreateDebate files.
-        :param dir_4f: the directory of the 4Forum.com files.
+        :param __dir_cd: the directory of the CreateDebate files.
+        :param __dir_4f: the directory of the 4Forum.com files.
         """
-        self.dir_cd = dir_cd
-        self.dir_4f = dir_4f
+        self.__dir_cd = __dir_cd
+        self.__dir_4f = __dir_4f
         #Import 4Forum topic annotations as a dictionary and an inverted dictionary
         self.topic_dict = {}
         self.inv_topic_dict = {}
-        with open(dir_4f + 'annotations/topic.csv') as csvfile:
+        if __dir_4f:
+            with open(__dir_4f + 'annotations/topic.csv') as csvfile:
+                self.topic_dict = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
+            self.topic_4f = set(self.topic_dict.values())
+            for tpc in self.topic_4f:
+                file_names = []
+                for k, v in self.topic_dict.items():
+                    if v == tpc:
+                        file_names.append(k)
+                self.inv_topic_dict[tpc] = file_names
+        #Valid CreateDebate topics
+        self.dir_lst = os.listdir(self.__dir_cd)
+    
+    #The lists of topics must be updated if the path to each data-set are changed
+    @property
+    def dir_cd(self):
+        return self.__dir_cd
+
+    @dir_cd.setter
+    def dir_cd(self, dir_cd):
+        self.__dir_cd = dir_cd
+        self.dir_lst = os.listdir(self.dir_cd)
+            
+    @property
+    def dir_4f(self):
+        return self.__dir_4f
+
+    @dir_4f.setter
+    def dir_4f(self, dir_4f):
+        self.__dir_4f = dir_4f
+        self.dir_lst = os.listdir(self.dir_cd)
+        with open(self.__dir_4f + 'annotations/topic.csv') as csvfile:
             self.topic_dict = dict(map(lambda dbt: (int(dbt[0]),re.sub(r"^\W+|\W+$", "", dbt[1])), list(csv.reader(csvfile, delimiter=','))[1:]))
         self.topic_4f = set(self.topic_dict.values())
         for tpc in self.topic_4f:
@@ -33,9 +64,7 @@ class Reader:
                 if v == tpc:
                     file_names.append(k)
             self.inv_topic_dict[tpc] = file_names
-        #Valid CreateDebate topics
-        self.dir_lst = os.listdir(self.dir_cd)
-        
+    
     def load_cd(self, topic_dir="", prefix='', exclude=False):
         """
         Load from CreateDebate dataset
@@ -48,14 +77,14 @@ class Reader:
         tpc_dir = topic_dir
         if not tpc_dir:
             tpc_dir = self.select_topic()
-        subset_az = ['ALL'] + subsetAZ(self.dir_cd + tpc_dir)
+        subset_az = ['ALL'] + subsetAZ(self.__dir_cd + tpc_dir)
         pfx = prefix
         if (not pfx) or (pfx not in subset_az):
             while (pfx not in subset_az):
                 pfx = input("Select a debate from:\n" + str(subset_az) + "\n").upper()
-        dataList = list(map(lambda d_file: os.path.join(self.dir_cd + tpc_dir, d_file), filter(lambda d_f:  filefilter(f=d_f, prefix=pfx, exclude=exclude), os.listdir(self.dir_cd + tpc_dir))))
+        dataList = list(map(lambda d_file: os.path.join(self.__dir_cd + tpc_dir, d_file), filter(lambda d_f:  filefilter(f=d_f, prefix=pfx, exclude=exclude), os.listdir(self.__dir_cd + tpc_dir))))
         dataList.sort()
-        metaList = list(map(lambda m_file: os.path.join(self.dir_cd + tpc_dir, m_file), filter(lambda m_f:  filefilter(m_f, '.meta',pfx, exclude), os.listdir(self.dir_cd + tpc_dir))))
+        metaList = list(map(lambda m_file: os.path.join(self.__dir_cd + tpc_dir, m_file), filter(lambda m_f:  filefilter(m_f, '.meta',pfx, exclude), os.listdir(self.__dir_cd + tpc_dir))))
         metaList.sort()
         post_list=[]
         for x in range(0, len(dataList)):
@@ -87,9 +116,9 @@ class Reader:
         """
         selected_topic = self.select_target(unseen_target)
         fn = random.choice(self.inv_topic_dict[selected_topic])
-        raw_debate = json.load(open(self.dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
+        raw_debate = json.load(open(self.__dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
         raw_post = random.choice(raw_debate)
-        post_id = str(raw_post[0])
+        post_id = str(fn) + '/' + str(raw_post[0])
         body = raw_post[3]
         #If a post_title exists (stored in a dictionary), it may contain an opinion, hence it is concatenated with the body
         maybe_dict = raw_post[4]
@@ -97,9 +126,10 @@ class Reader:
             post_info = maybe_dict['post_info']
             if 'post_title' in post_info:
                 body = post_info['post_title'] + '\n' + body
-        print(body)
-        stance = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
-        return preprocess.Post(body, stance, post_id, selected_topic)
+        new_post = preprocess.Post(body, 'Choose a Stance', post_id, selected_topic)
+        print(new_post)
+        new_post.label = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
+        return new_post
     
     def select_target(self, given_target=''):
         lst = list(self.topic_4f)
@@ -181,6 +211,7 @@ if __name__ == '__main__':
     rdr = Reader('../data/CreateDebate/', '../data/fourforums/')
     #Load a debate from the CreateDebate dataset that the user has been prompted to select.
     dbt = rdr.load_cd()
+    
     #Load a random post from the 4Forums.com dataset and prompt the user to classify it.
     pst = rdr.load_4f()
     

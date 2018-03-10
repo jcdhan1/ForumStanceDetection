@@ -5,7 +5,6 @@ Created on Fri Mar  2 15:28:40 2018
 @author: aca15jch
 """
 import preprocess, nltk, reader
-from gensim import utils
 from gensim.models import Word2Vec
 from twokenize_wrapper.twokenize import tokenize
 

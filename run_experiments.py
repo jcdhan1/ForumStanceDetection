@@ -14,10 +14,9 @@ OPTIONS:
 """
 
 import numpy as np
-import reader, writer, preprocess, os, copy, sys, tabulate, argparse
+import reader, writer, preprocess, copy, tabulate, argparse
 from twokenize_wrapper.twokenize import tokenize
-from gensim.models import Word2Vec
-from sklearn import svm, datasets
+from sklearn import svm
 from sklearn.preprocessing import scale
 
 STANCES = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
@@ -147,35 +146,31 @@ def correctness(actual, predicted, class_n):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments setup 1 or 2.')
-    parser.add_argument('--classifier', metavar='c', nargs='?', default ='', help='The classifier to use.')
-    parser.add_argument('--image', metavar='i', nargs='?', default ='', help='Where to output graphs.')
-    parser.add_argument('--setup', metavar='s', nargs='?', default = 0, type=int, help='Experiment setup to use.')
-    parser.add_argument('--createdebate', metavar='d', nargs='?', default ='', help='The CreateDebate post directory.')
-    parser.add_argument('--topic', metavar='t', nargs='?', default ='', help='The toic (setup 1) or seen target (setup 2)')
-    parser.add_argument('--4forums', metavar='4', nargs='?', default ='', help='The 4Forums.com post directory.')
-    parser.add_argument('--unseen', metavar='4', nargs='?', default ='', help='The unseen target (setup 2).')
-    args = parser.parse_args()
-    
-    print(args)
+    parser.add_argument('--classifier', '-c', nargs='?', default ='', help='The classifier to use.')
+    parser.add_argument('--image', '-i', nargs='?', default ='', help='Where to output graphs.')
+    parser.add_argument('--setup', '-s', nargs='?', default = 0, type=int, help='Experiment setup to use.')
+    parser.add_argument('--createdebate', '-d', nargs='?', default ='', help='The CreateDebate post directory.')
+    parser.add_argument('--topic', '-t', nargs='?', default ='', help='The topic (setup 1) or seen target (setup 2)')
+    parser.add_argument('--4forums', '-4', nargs='?', default ='', help='The 4Forums.com post directory.')
+    parser.add_argument('--unseen', '-u', nargs='?', default ='', help='The unseen target (setup 2).')
+    args = vars(parser.parse_args())
     
     classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
     classifier_dict = dict(zip(classifier_names, classifiers))
-    valid_classifier = vars(args)['classifier'].lower() in classifier_names
-    classifier_choice = vars(args)['classifier'].lower() if valid_classifier else reader.select_opt(classifier_names, "Select a classifier:")
+    valid_classifier = args['classifier'].lower() in classifier_names
+    classifier_choice = args['classifier'].lower() if valid_classifier else reader.select_opt(classifier_names, "Select a classifier:")
 
-    dir_cd = input("Where are the posts from CreateDebate stored?") if not vars(args)['createdebate'] else vars(args)['createdebate'] #./data/CreateDebate/
+    dir_cd = input("Where are the posts from CreateDebate stored?") if not args['createdebate'] else args['createdebate'] #./data/CreateDebate/
+    rdr=reader.Reader(dir_cd)
     
-    dir_4f = input("Where are the posts from 4Forums.com stored?") if not vars(args)['4forums'] else vars(args)['4forums'] #./data/fourforums/
-    rdr(dir_cd,dir_4f)
-    
-    valid_setup = 0 < vars(args)['setup'] < 3
-    setup_choice = 'setup ' + str(vars(args)['setup']) if valid_setup else reader.select_opt(['setup 1','setup 2'],'Select an experiment setup:')
-    img_path = input("Where should graphs be exported to?") if not vars(args)['image'] else vars(args)['image']
-    topic = rdr.select_topic() if vars(args)['topic'] not in rdr.dir_lst else vars(args)['topic']
+    valid_setup = 0 < args['setup'] < 3
+    setup_choice = 'setup ' + str(args['setup']) if valid_setup else reader.select_opt(['setup 1','setup 2'],'Select an experiment setup:')
+    img_path = input("Where should graphs be exported to?") if not args['image'] else args['image']
+    topic = rdr.select_topic() if args['topic'] not in rdr.dir_lst else args['topic']
     
     if setup_choice == 'setup 1':
-        #Experiment 1
+        #Experiment 1 args: -i ./img/experiment_1/ -s 1 -d ./data/CreateDebate/
         classifier1 = copy.deepcopy(classifier_dict[classifier_choice]) 
         experiment1 = Experiment1(classifier1,img_path,dir_cd,topic)
         mets, accs, max_props = experiment1.evaluate(rdr)
@@ -186,9 +181,10 @@ if __name__ == '__main__':
             print(tabulate.tabulate(metrics, headers="keys"))
         
     else:
-        #Experiment 2
-    
-        unseen_target = rdr.select_target() if vars(args)['unseen'] not in rdr.topic_4f else vars(args)['unseen']
+        #Experiment 2 args: -i ./img/experiment_2/ -s 2 -d ./data/CreateDebate/ -4 ./data/fourforums/
+        dir_4f = input("Where are the posts from 4Forums.com stored?") if not args['4forums'] else args['4forums'] #./data/fourforums/
+        rdr.dir_4f = dir_4f
+        unseen_target = rdr.select_target() if args['unseen'] not in rdr.topic_4f else args['unseen']
         classifier2 = copy.deepcopy(classifier_dict[classifier_choice]) 
         experiment2 = Experiment2(classifier2,img_path,dir_cd,dir_4f,topic,unseen_target)
         experiment2.evaluate(rdr)
