@@ -33,7 +33,9 @@ class Reader:
                 if v == tpc:
                     file_names.append(k)
             self.inv_topic_dict[tpc] = file_names
-
+        #Valid CreateDebate topics
+        self.dir_lst = os.listdir(self.dir_cd)
+        
     def load_cd(self, topic_dir="", prefix='', exclude=False):
         """
         Load from CreateDebate dataset
@@ -45,7 +47,7 @@ class Reader:
         """
         tpc_dir = topic_dir
         if not tpc_dir:
-            tpc_dir = select_topic(self.dir_cd)
+            tpc_dir = self.select_topic()
         subset_az = ['ALL'] + subsetAZ(self.dir_cd + tpc_dir)
         pfx = prefix
         if (not pfx) or (pfx not in subset_az):
@@ -107,11 +109,10 @@ class Reader:
         else:
             return given_target
 
-def select_topic(directory):
-    print('Input | Directory')
-    dir_lst = os.listdir(directory)
-    topic = select_opt(dir_lst, 'Select a topic: ')
-    return topic
+    def select_topic(self):
+        print('Input | Directory')
+        topic = select_opt(self.dir_lst, 'Select a topic: ')
+        return topic
 
 def select_opt(opt,prompt,dct=""):
     """
