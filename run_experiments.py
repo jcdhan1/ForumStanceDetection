@@ -1,16 +1,7 @@
-"""\
-------------------------------------------------------------
-USE: python <PROGNAME> (options) (directory, debate identifier or topic)
-OPTIONS:
-    --help        ,  -h: print this help message
-    --classifier     -c: What classifier to use
-    --image          -i: Where to export graphs
-    --setup       ,  -s: Experiment setup to use
-    --createdebate,  -d: CreateDebate post directory
-    --topic       ,  -t: topic/seen target
-    --4forums     ,  -f: 4Forums.com post directory
-    --topic2      ,  -u: unseen target
-------------------------------------------------------------
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Mar  4 19:38:20 2018
+@author: aca15jch
 """
 
 import numpy as np
@@ -69,8 +60,8 @@ class Experiment1(Experiment):
     
     def evaluate(self, rdr):
         mets = {}
-        accs = []
-        max_props = []
+        accs = {}
+        max_props = {}
         for prefix in reader.subsetAZ(self.dir_cd + self.topic):
             print("Generating model")
             train_data = rdr.load_cd(topic, prefix, True)
@@ -87,7 +78,7 @@ class Experiment1(Experiment):
             
             # Evaluation Metrics
             accuracy = self.classifier.score(test_arrays, test_labels)
-            accs += [accuracy]
+            accs[prefix] = accuracy
             print("Accuracy:", accuracy)
             predicted = list(self.classifier.predict(test_arrays))
             metrics={'Metric': ['Precision', 'Recall', 'F-measure', 'Proportion in Training Data']}
@@ -108,7 +99,7 @@ class Experiment1(Experiment):
                 proportion = train_labels.count(n)/len(train_labels)
                 proportions+=[proportion]
                 metrics[stance] = [precision, recall, f_measure, proportion]
-            max_props += [max(proportions)]
+            max_props[prefix] = max(proportions)
             mets[prefix] = metrics
         return mets, accs, max_props
     
@@ -174,10 +165,11 @@ if __name__ == '__main__':
         classifier1 = copy.deepcopy(classifier_dict[classifier_choice]) 
         experiment1 = Experiment1(classifier1,img_path,dir_cd,topic)
         mets, accs, max_props = experiment1.evaluate(rdr)
-        print("Mean Accuracy:", np.mean(accs))
-        print("# of times accuracy was greater than proportion of most frequent stance in training data:", sum([x[0]>x[1] for x in zip(accs,max_props)]))
+        print("Mean Accuracy:", np.mean(list(accs.values())))
+        print("# of times accuracy was greater than proportion of most frequent stance in training data:", sum([accs[prefix] > max_props[prefix] for prefix in reader.subsetAZ(dir_cd + topic)]))
         for prefix, metrics in mets.items():
             print(prefix)
+            print(accs[prefix])
             print(tabulate.tabulate(metrics, headers="keys"))
         
     else:
