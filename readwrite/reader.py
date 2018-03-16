@@ -107,29 +107,37 @@ class Reader:
         dbt = preprocess.Debate(tpc_dir, post_list)
         return dbt
         
-    def load_4f(self, unseen_target = ""):
+    def load_4f(self, unseen_target = "", n=1):
         """
-        Load a random post from the 4Forums.com dataset and prompt the user to classify it.
+        Load random posts from the 4Forums.com dataset and prompt the user to classify them.
         
-        :param unseen_target: The topic of the post.
+        :param unseen_target: The topic of the posts.
+        :param n            : How many posts to select.
         :return             : A Post object.
         """
         selected_topic = self.select_target(unseen_target)
-        fn = random.choice(self.inv_topic_dict[selected_topic])
-        raw_debate = json.load(open(self.__dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
-        raw_post = random.choice(raw_debate)
-        post_id = str(fn) + '/' + str(raw_post[0])
-        body = raw_post[3]
-        #If a post_title exists (stored in a dictionary), it may contain an opinion, hence it is concatenated with the body
-        maybe_dict = raw_post[4]
-        if 'post_info' in maybe_dict:
-            post_info = maybe_dict['post_info']
-            if 'post_title' in post_info:
-                body = post_info['post_title'] + '\n' + body
-        new_post = preprocess.Post(body, 'Choose a Stance', post_id, selected_topic)
-        print(new_post)
-        new_post.label = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
-        return new_post
+        post_list = []
+        for i in range(0,n):
+            while True:
+                fn = random.choice(self.inv_topic_dict[selected_topic])
+                raw_debate = json.load(open(self.__dir_4f+'discussions/'+str(fn)+'.json'))[:-2][0]
+                raw_post = random.choice(raw_debate)
+                post_id = str(fn) + '/' + str(raw_post[0])
+                if post_id not in list(map(lambda p:p.post_id, post_list)):
+                    break
+            body = raw_post[3]
+            #If a post_title exists (stored in a dictionary), it may contain an opinion, hence it is concatenated with the body
+            maybe_dict = raw_post[4]
+            if 'post_info' in maybe_dict:
+                post_info = maybe_dict['post_info']
+                if 'post_title' in post_info:
+                    body = post_info['post_title'] + '\n' + body
+            new_post = preprocess.Post(body, 'Choose a Stance', post_id, selected_topic)
+            print(new_post)
+            new_post.label = select_opt(["AGAINST","NONE", "FAVOR"],"What is the stance of this post?")
+            post_list += [new_post]
+        dbt = preprocess.Debate(unseen_target, post_list)
+        return dbt
     
     def select_target(self, given_target=''):
         lst = list(self.topic_4f)
@@ -210,14 +218,15 @@ if __name__ == '__main__':
     #Instantiate a Reader
     rdr = Reader('../data/CreateDebate/', '../data/fourforums/')
     #Load a debate from the CreateDebate dataset that the user has been prompted to select.
-    dbt = rdr.load_cd()
+    dbt1 = rdr.load_cd()
     
     #Load a random post from the 4Forums.com dataset and prompt the user to classify it.
-    pst = rdr.load_4f()
+    dbt2 = rdr.load_4f(n=3)
     
     print("Learn from these:")
-    for p in dbt.post_list:
+    for p in dbt1.post_list:
         print(p)
     
-    print("Classify this:")
-    print(pst)
+    print("Classify these:")
+    for p in dbt2.post_list:
+        print(p)
