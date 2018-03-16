@@ -146,6 +146,9 @@ if __name__ == '__main__':
     parser.add_argument('--unseen', '-u', nargs='?', default ='', help='The unseen target (setup 2).')
     args = vars(parser.parse_args())
     
+    clf = svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
+    
+    
     classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
     classifier_dict = dict(zip(classifier_names, classifiers))
@@ -165,7 +168,7 @@ if __name__ == '__main__':
         classifier1 = copy.deepcopy(classifier_dict[classifier_choice]) 
         experiment1 = Experiment1(classifier1,img_path,dir_cd,topic)
         mets, accs, max_props = experiment1.evaluate(rdr)
-        print("Mean Accuracy:", np.mean(list(accs.values())))
+        print("Accuracy:", np.mean(list(accs.values())))
         print("# of times accuracy was greater than proportion of most frequent stance in training data:", sum([accs[prefix] > max_props[prefix] for prefix in reader.subsetAZ(dir_cd + topic)]))
         for prefix, metrics in mets.items():
             print(prefix)
