@@ -75,12 +75,12 @@ if __name__ == '__main__':
     a_dbt = rdr.load_cd(seen_target, 'A')
     not_a_dbt = rdr.load_cd(seen_target, 'A', True)
     all_marijuana = rdr.load_cd(seen_target, "ALL")
-    rndm_dbt = rdr.load_4f(unseen_target)
+    rndm_dbt = rdr.load_4f(unseen_target, n=2)
     
     #Instantiate a Writer_X1
     ex1gen = Writer_X1(not_a_dbt, a_dbt, "marijuana", "A")
     ex1gen.skipgram(15,4,151)
     
     #Instantiate a Writer
-    ex2gen = Writer(all_marijuana, preprocess.Debate(unseen_target, [rndm_dbt]))
+    ex2gen = Writer(all_marijuana, rndm_dbt)
     ex2gen.skipgram(15,4,151)

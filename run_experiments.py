@@ -116,21 +116,35 @@ class Experiment2(Experiment):
         self.dir_4f = dir_4f
         self.seen_target = seen_target
         self.unseen_target = unseen_target
+        self.occ = svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
+        self.test_train_ratio = 1/99
     
     def evaluate(self, rdr):
         train_data = rdr.load_cd(self.seen_target,'ALL')
-        rdm_dbt = rdr.load_4f(unseen_target)
-        test_data = preprocess.Debate(unseen_target, [rdm_dbt])
+        print("Training on all", len(train_data.post_list), self.seen_target, "posts")
+        test_size = int(len(train_data.post_list)*self.test_train_ratio)
+        print("Testing on", test_size, self.unseen_target, "posts")
+        test_data = rdr.load_4f(self.unseen_target, test_size)
         wvm_gen = writer.Writer(train_data, test_data)
         wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
         train_arrays = wvmodel.vectorise_debate(train_data)
         test_arrays  = wvmodel.vectorise_debate(test_data)
+        self.occ.fit(train_arrays)
         train_labels = wvmodel.stance_to_int(train_data)
         test_labels = wvmodel.stance_to_int(test_data)
-        print("Training on all", self.seen_target, "debates")
         self.classifier.fit(train_arrays,train_labels)
-        print("Testing on", unseen_target, "debate", rdm_dbt.post_id)
-        print("Accuracy:", self.classifier.score(test_arrays, test_labels))
+        
+        predictions=[]
+        for p in test_arrays:
+            if self.occ.predict([p]) == -1:
+                prediction = [0]
+            else:
+                prediction = self.classifier.predict([p])
+            predictions += prediction
+        print(predictions)
+        print(test_labels)
+        acc = sum([x[0]==x[1] for x in zip(test_labels,predictions)])/test_size
+        print("Accuracy:",acc)
 
 def correctness(actual, predicted, class_n):
     return sum([(x[0]==x[1] and x[0]==class_n) for x in zip(actual, predicted)])
@@ -145,9 +159,6 @@ if __name__ == '__main__':
     parser.add_argument('--4forums', '-4', nargs='?', default ='', help='The 4Forums.com post directory.')
     parser.add_argument('--unseen', '-u', nargs='?', default ='', help='The unseen target (setup 2).')
     args = vars(parser.parse_args())
-    
-    clf = svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
-    
     
     classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
     classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
