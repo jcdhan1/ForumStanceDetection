@@ -13,5 +13,7 @@ if list(filter(lambda p: 'readwrite' in p, sys.path))==[]:
     sys.path.append(os.path.abspath('./readwrite'))
 if list(filter(lambda p: 'preprocess' in p, sys.path))==[]:
     sys.path.append(os.path.abspath('./preprocess'))
+if list(filter(lambda p: 'classifiers' in p, sys.path))==[]:
+    sys.path.append(os.path.abspath('./classifiers'))
 print(sys.path)
 nltk.download()
