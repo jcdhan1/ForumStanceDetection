@@ -9,15 +9,14 @@ from gensim.models import Word2Vec
 from twokenize_wrapper.twokenize import tokenize
 
 class Writer:
-    def __init__(self, train_data, test_data):
+    def __init__(self, train_data):
         """
         A class for vectorising data from forum posts.
         """
         self.train_data = train_data
-        self.test_data = test_data
         self.model = None
     
-    def skipgram(self, context, num_workers, num_features, save=False):
+    def skipgram(self, context, num_workers, num_features):
         """
         Generate a skip-gram file.
         
@@ -39,14 +38,11 @@ class Writer:
         return model_sg
         
 class Writer_X1(Writer):
-    def __init__(self, train_data, test_data, topic, prefix):
+    def __init__(self, train_data, topic, prefix):
         """
-        Subclass of Writer for experiment setup 1 where both training and testing data are
-        sourced from the CreateDebate data-set.
+        Subclass of Writer for experiment setup 1
         """
-        if not all(map(lambda p: type(p).__name__=='Post_CD',train_data.post_list + test_data.post_list)):
-            raise ValueError('All items in train_data.postlist and test_data.postlist but be an instance of preprocess.Post_CD.')
-        super(Writer_X1, self).__init__(train_data, test_data)
+        super(Writer_X1, self).__init__(train_data)
         self.topic = topic
         self.prefix = prefix
 
@@ -72,15 +68,13 @@ if __name__ == '__main__':
     unseen_target = "marijuana legalization"
     
     #Load posts from both data-sets
-    a_dbt = rdr.load_cd(seen_target, 'A')
     not_a_dbt = rdr.load_cd(seen_target, 'A', True)
     all_marijuana = rdr.load_cd(seen_target, "ALL")
-    rndm_dbt = rdr.load_4f(unseen_target, n=2)
     
     #Instantiate a Writer_X1
-    ex1gen = Writer_X1(not_a_dbt, a_dbt, "marijuana", "A")
+    ex1gen = Writer_X1(not_a_dbt, "marijuana", "A")
     ex1gen.skipgram(15,4,151)
     
     #Instantiate a Writer
-    ex2gen = Writer(all_marijuana, rndm_dbt)
+    ex2gen = Writer(all_marijuana)
     ex2gen.skipgram(15,4,151)

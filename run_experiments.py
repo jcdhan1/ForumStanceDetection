@@ -5,18 +5,25 @@ Created on Sun Mar  4 19:38:20 2018
 """
 
 import numpy as np
-import reader, writer, preprocess, copy, tabulate, argparse
+import reader, writer, preprocess, copy, tabulate, argparse, conditional
 from twokenize_wrapper.twokenize import tokenize
 from sklearn import svm
 from gensim.models import Word2Vec
 from sklearn.preprocessing import scale
 import matplotlib.pyplot as plt
 
+
+from keras.preprocessing.sequence import pad_sequences
+from keras.preprocessing.text import Tokenizer
+
+import re
+
 STANCES = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
 
 class Model_Wrapper:
-    def __init__(self, model):
-        self.model = model                                                                                                                                                                                                                                                                                      
+    def __init__(self, model, conditional=False):
+        self.model = model                 
+        self.conditional = conditional                                                                                                                                                                                                                                                                     
     
     def vectorise_body(self, tokenised_body):
         v_of_vectors = np.zeros(self.model.layer1_size).reshape((1, self.model.layer1_size))
@@ -32,10 +39,23 @@ class Model_Wrapper:
         return v_of_vectors
     
     def vectorise_debate(self, debate):
-        return scale(np.concatenate(list(map(lambda p: self.vectorise_body(writer.filterStopwords(tokenize(p.body.lower()))),debate.post_list))))
-    
-    def stance_to_int(self, debate):
-        return list(map(lambda p: STANCES[p.label], debate.post_list))
+        if self.conditional:
+            tokenizer = Tokenizer(num_words=151, split=' ')
+            
+            sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in debate.post_list])
+            
+            tokenizer.fit_on_texts(sanitized_bodies)
+            vecs = tokenizer.texts_to_sequences(sanitized_bodies)
+            vecs = pad_sequences (vecs)
+            return vecs
+        else:
+            return scale(np.concatenate(list(map(lambda p: self.vectorise_body(writer.filterStopwords(tokenize(p.body.lower()))),debate.post_list))))
+
+    def stance_to_vec(self, debate):
+        if self.conditional:
+            return np.array([[1,0] if p.label=='AGAINST' else [0,1] for p in debate.post_list])
+        else:    
+            return list(map(lambda p: STANCES[p.label], debate.post_list))
     
 class Experiment:
     def __init__(self, classifier, img_path, dir_cd, train_data={}, test_data={}, models={}):
@@ -75,6 +95,8 @@ class Experiment:
         plt.savefig(self.img_path + self.img_directory() + '/' + x1_filename(classifier,name_1,name_2, m_name), format='svg')
         plt.show()
 
+def format_labels(label_array):
+    return [(-1 if list(l)==[1,0] else 1) for l in label_array]
 
 class Experiment1(Experiment):
     def __init__(self, classifier, img_path, dir_cd, topic, train_data={}, test_data={}, models={}):
@@ -89,7 +111,7 @@ class Experiment1(Experiment):
     def img_directory(self):
         return self.topic
     
-    def evaluate(self, rdr):
+    def evaluate(self):
         mets = {}
         accs = {}
         max_props = {}
@@ -97,33 +119,42 @@ class Experiment1(Experiment):
             wvmodel = self.models[prefix]
             train_arrays = wvmodel.vectorise_debate(self.train_data[prefix])
             test_arrays  = wvmodel.vectorise_debate(self.test_data[prefix])
-            train_labels = wvmodel.stance_to_int(self.train_data[prefix])
-            test_labels = wvmodel.stance_to_int(self.test_data[prefix])
+            train_labels = wvmodel.stance_to_vec(self.train_data[prefix])
+            test_labels = wvmodel.stance_to_vec(self.test_data[prefix])
             print("Training on", topic, "debates except for", prefix)
             self.classifier.fit(train_arrays,train_labels)
             print("Testing on", topic, "debate", prefix)
             
-            # Evaluation Metrics
+            if wvmodel.conditional:
+                test_arrays = pad_sequences(test_arrays, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
             accuracy = self.classifier.score(test_arrays, test_labels)
+            
             accs[prefix] = accuracy
             print("Accuracy:", accuracy)
-            predicted = list(self.classifier.predict(test_arrays))
+            predicted = self.classifier.predict(test_arrays)
             metrics={'Metric': ['Precision', 'Recall', 'F-measure', 'Proportion in Training Data']}
+            
+            actual=test_labels
+            if wvmodel.conditional:
+                actual=format_labels(test_labels)
+                formatted_train_labels=format_labels(train_labels)
+                predicted = format_labels(predicted)
             
             proportions=[]
             for stance, n in STANCES.items():
                 #Avoid division by zero if testing data doesn't have the stance
-                numerator = correctness(test_labels,predicted, n)
+                numerator = correctness(actual,predicted, n)
+                
                 denominator1 = predicted.count(n)
-                denominator2 = test_labels.count(n)
-                precision = numerator/denominator1 if denominator1 > 0 else "n/a"
-                recall = numerator/denominator2 if denominator2 > 0 else "n/a"
-                f_measure = "n/a"
+                denominator2 = actual.count(n)
+                precision = numerator/denominator1 if denominator1 > 0 else 0
+                recall = numerator/denominator2 if denominator2 > 0 else 0
+                f_measure = 0
                 if denominator1 > 0 and denominator2 > 0:
                     f_measure = 2*precision*recall
                     if precision+recall > 0:
                         f_measure = f_measure/(precision+recall)
-                proportion = train_labels.count(n)/len(train_labels)
+                proportion = formatted_train_labels.count(n)/len(formatted_train_labels)
                 proportions+=[proportion]
                 metrics[stance] = [precision, recall, f_measure, proportion]
             max_props[prefix] = max(proportions)
@@ -152,8 +183,8 @@ class Experiment1_5(Experiment):
         wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
         train_arrays = wvmodel.vectorise_debate(train_data)
         test_arrays  = wvmodel.vectorise_debate(test_data)
-        train_labels = wvmodel.stance_to_int(train_data)
-        test_labels = wvmodel.stance_to_int(test_data)
+        train_labels = wvmodel.stance_to_vec(train_data)
+        test_labels = wvmodel.stance_to_vec(test_data)
         print("Training on", self.seen_target, "debates")
         self.classifier.fit(train_arrays,train_labels)
         print("Testing on", self.unseen_target, "debates")
@@ -209,8 +240,8 @@ class Experiment2(Experiment):
         test_arrays  = wvmodel.vectorise_debate(test_data)
         print('Training')
         self.occ.fit(train_arrays)
-        train_labels = wvmodel.stance_to_int(train_data)
-        test_labels = wvmodel.stance_to_int(test_data)
+        train_labels = wvmodel.stance_to_vec(train_data)
+        test_labels = wvmodel.stance_to_vec(test_data)
         print(train_arrays.shape)
         print(train_labels.shape)
         self.classifier.fit(train_arrays,train_labels)
@@ -236,7 +267,7 @@ def extract_metrics(mets, stance, m_int):
     return dict(map(lambda m: (m[0], m[1][stance][m_int]), mets.items()))
 
 def x1_filename(classifier, name_1, name_2, m_name=''):
-    return classifier + name_1 + name_2 + m_name + '.svg'
+    return classifier.replace(" ", "") + name_1 + name_2 + m_name + '.svg'
     
 if __name__ == '__main__':
     plt.rcParams['svg.fonttype'] = 'none'
@@ -250,9 +281,11 @@ if __name__ == '__main__':
     parser.add_argument('--unseen', '-u', nargs='?', default ='', help='The unseen target (setup 1.5).')
     args = vars(parser.parse_args())
     
-    classifiers = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
-    classifier_names = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
-    classifier_dict = dict(zip(classifier_names, classifiers))
+    classifier_arr = [svm.LinearSVC()] + list(map(lambda k: svm.SVC(kernel=k), ['linear', 'poly', 'sigmoid', 'rbf'])) #Will implement LSTMs
+    baselines = ['liblinear', 'linear', 'Polynomial','Sigmoid','Radial Basis Function']
+    classifier_names = baselines + ['conditional', 'bidirectional']
+    classifier_arr = classifier_arr + [conditional.Conditional_Encoding(), conditional.Bidirectional_Encoding()]
+    classifier_dict = dict(zip(classifier_names, classifier_arr))
     valid_classifier = args['classifier'].lower() in classifier_names
     classifier_choice = args['classifier'].lower() if valid_classifier else reader.select_opt(classifier_names, "Select a classifier: ")
 
@@ -272,28 +305,33 @@ if __name__ == '__main__':
             train_data1[prefix] = rdr.load_cd(topic, prefix, True)
             test_data1[prefix] = rdr.load_cd(topic, prefix)
     
-    wvm_gen = writer.Writer_X1(train_data1[prefix], test_data1[prefix], topic, prefix)
-    if(input('regenerate models for experiment 1?') == 'y'):
-        models1 = {}
-        print('Generating Models')
-        for prefix in reader.subsetAZ(dir_cd + topic):
-            print(prefix)
-            models1[prefix] =  Model_Wrapper(wvm_gen.skipgram(15,4,151))
-            models1[prefix].model.save('./out/experiment_1/' + topic + '/' + prefix + '.wv')
+    if classifier_choice in baselines:
+        wvm_gen = writer.Writer_X1(train_data1[prefix], topic, prefix)
+        if(input('regenerate models for experiment 1?') == 'y'):
+            models1 = {}
+            print('Generating Models')
+            for prefix in reader.subsetAZ(dir_cd + topic):
+                print(prefix)
+                models1[prefix] =  Model_Wrapper(wvm_gen.skipgram(15,4,151))
+                models1[prefix].model.save('./out/experiment_1/' + topic + '/' + prefix + '.wv')
+        else:
+            print('Loading Models')
+            for prefix in reader.subsetAZ(dir_cd + topic):
+                print(prefix)
+                models1[prefix] =  Model_Wrapper(Word2Vec.load('./out/experiment_1/' + topic + '/' + prefix + '.wv'))
     else:
-        print('Loading Models')
+        print('Generating Models')
+        models1 = {}
         for prefix in reader.subsetAZ(dir_cd + topic):
             print(prefix)
-            models1[prefix] =  Model_Wrapper(Word2Vec.load('./out/experiment_1/' + topic + '/' + prefix + '.wv'))
+            models1[prefix] = Model_Wrapper(None, True)
     
     if setup_choice == 'setup 1':
         #Experiment 1 args: -i ./img/experiment_1/ -s 1 -d ./data/CreateDebate/
         classifier1 = copy.deepcopy(classifier_dict[classifier_choice]) 
-        experiment1 = Experiment1(classifier1,img_path,dir_cd, topic, train_data1, train_data1, models1)
-        mets, accs, max_props = experiment1.evaluate(rdr)
+        experiment1 = Experiment1(classifier1,img_path,dir_cd, topic, train_data1, test_data1, models1)
+        mets, accs, max_props = experiment1.evaluate()
         print("Accuracy:", np.mean(list(accs.values())))
-        print("\\newline")
-        print("Number of times accuracy was greater than proportion of most frequent stance in training data:", sum([accs[prefix] > max_props[prefix] for prefix in reader.subsetAZ(dir_cd + topic)]))
         for prefix, metrics in mets.items():
             del metrics['NONE']
             print("\\newline")
@@ -302,6 +340,8 @@ if __name__ == '__main__':
             print("Accuracy:", accs[prefix])
             print('\\newline')
             print(tabulate.tabulate(metrics, headers="keys", tablefmt="latex"))
+        print("Number of times accuracy was greater than proportion of most frequent stance in training data:", sum([accs[prefix] > max_props[prefix] for prefix in reader.subsetAZ(dir_cd + topic)]))
+        print("\\newline")
         print("\\begin{minipage}{\linewidth}")
         print('    Accuracy')
         print('    \\newline')
