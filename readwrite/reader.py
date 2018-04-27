@@ -100,7 +100,7 @@ class Reader:
                 if any(char.isdigit() for char in raw_stance):
                     if int(raw_stance) < 0:
                         new_post.label = "AGAINST"
-                    elif int(raw_stance) > 0:
+                    elif int(raw_stance) >= 0:
                         new_post.label = "FAVOR"
             post_list.append(new_post)
         post_list.sort(key=lambda p: p.post_id)

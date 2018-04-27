@@ -11,7 +11,7 @@ class Post:
         Constructor for Post.
         
         :param body: the post's text body.
-        :param label: takes values of "AGAINST", "NONE", or "FAVOR".
+        :param label: takes values of "AGAINST" or "FAVOR".
         :param post_id: a number uniquely identifying the post.
         :param topic: the topic of the post.
         """

@@ -18,7 +18,7 @@ from keras.preprocessing.text import Tokenizer
 
 import re
 
-STANCES = {'AGAINST': -1, 'NONE': 0, 'FAVOR': 1}
+STANCES = {'AGAINST': 0, 'FAVOR': 1}
 
 class Model_Wrapper:
     def __init__(self, model, conditional=False):
@@ -46,16 +46,14 @@ class Model_Wrapper:
             
             tokenizer.fit_on_texts(sanitized_bodies)
             vecs = tokenizer.texts_to_sequences(sanitized_bodies)
-            vecs = pad_sequences (vecs)
+            vecs = pad_sequences(vecs)
             return vecs
         else:
             return scale(np.concatenate(list(map(lambda p: self.vectorise_body(writer.filterStopwords(tokenize(p.body.lower()))),debate.post_list))))
 
-    def stance_to_vec(self, debate):
-        if self.conditional:
-            return np.array([[1,0] if p.label=='AGAINST' else [0,1] for p in debate.post_list])
-        else:    
-            return list(map(lambda p: STANCES[p.label], debate.post_list))
+    
+    def stance_to_n(self, debate):
+        return [STANCES[p.label] for p in debate.post_list]
     
 class Experiment:
     def __init__(self, classifier, img_path, dir_cd, train_data={}, test_data={}, models={}):
@@ -95,9 +93,6 @@ class Experiment:
         plt.savefig(self.img_path + self.img_directory() + '/' + x1_filename(classifier,name_1,name_2, m_name), format='svg')
         plt.show()
 
-def format_labels(label_array):
-    return [(-1 if list(l)==[1,0] else 1) for l in label_array]
-
 class Experiment1(Experiment):
     def __init__(self, classifier, img_path, dir_cd, topic, train_data={}, test_data={}, models={}):
         """
@@ -118,43 +113,69 @@ class Experiment1(Experiment):
         for prefix in reader.subsetAZ(self.dir_cd + self.topic):
             wvmodel = self.models[prefix]
             train_arrays = wvmodel.vectorise_debate(self.train_data[prefix])
-            test_arrays  = wvmodel.vectorise_debate(self.test_data[prefix])
-            train_labels = wvmodel.stance_to_vec(self.train_data[prefix])
-            test_labels = wvmodel.stance_to_vec(self.test_data[prefix])
+            if not wvmodel.conditional:
+                test_arrays  = wvmodel.vectorise_debate(self.test_data[prefix])
+            train_labels = wvmodel.stance_to_n(self.train_data[prefix])
+            test_labels = wvmodel.stance_to_n(self.test_data[prefix])
             print("Training on", topic, "debates except for", prefix)
             self.classifier.fit(train_arrays,train_labels)
             print("Testing on", topic, "debate", prefix)
             
             if wvmodel.conditional:
-                test_arrays = pad_sequences(test_arrays, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
-            accuracy = self.classifier.score(test_arrays, test_labels)
+                tokenizer = Tokenizer(num_words=20000, split=' ')
+            
+                sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in self.test_data[prefix].post_list])
+                
+                tokenizer.fit_on_texts(sanitized_bodies)
+                vecs = tokenizer.texts_to_sequences(sanitized_bodies)
+                test_arrays = pad_sequences(vecs, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
+                score,accuracy = self.classifier.nn.evaluate(test_arrays, test_labels, verbose = 2, batch_size = 64)
+                print("score: %.2f" % (score))
+                print("acc: %.2f" % (accuracy))
+                predicted = list(self.classifier.nn.predict_classes(test_arrays).flatten())
+            else:
+                accuracy = self.classifier.score(test_arrays, test_labels)
+                predicted = list(self.classifier.predict(test_arrays))
             
             accs[prefix] = accuracy
             print("Accuracy:", accuracy)
-            predicted = self.classifier.predict(test_arrays)
+           
             metrics={'Metric': ['Precision', 'Recall', 'F-measure', 'Proportion in Training Data']}
             
             actual=test_labels
-            if wvmodel.conditional:
-                actual=format_labels(test_labels)
-                formatted_train_labels=format_labels(train_labels)
-                predicted = format_labels(predicted)
+            
+            print(actual)
+            print(predicted)
+            print(set(actual))
+            print(set(predicted))
+            print(len(actual))
+            print(len(predicted))
             
             proportions=[]
             for stance, n in STANCES.items():
-                #Avoid division by zero if testing data doesn't have the stance
-                numerator = correctness(actual,predicted, n)
                 
-                denominator1 = predicted.count(n)
-                denominator2 = actual.count(n)
-                precision = numerator/denominator1 if denominator1 > 0 else 0
-                recall = numerator/denominator2 if denominator2 > 0 else 0
+                denominatorP=predicted.count(n)
+                denominatorR=actual.count(n)
+                if denominatorP + predicted.count(abs(1-n)) !=len(actual):
+                    raise ValueError('Incorrect number of stances')
+                
+                #Avoid division by 0
+                numerator = correctness(actual,predicted, n)
+                                    
+                precision = 0
+                if(denominatorP!=0):
+                    precision = numerator/denominatorP
+                    
+                recall = 0
+                if(denominatorR!=0):
+                    recall = numerator/denominatorR
+                
                 f_measure = 0
-                if denominator1 > 0 and denominator2 > 0:
-                    f_measure = 2*precision*recall
-                    if precision+recall > 0:
-                        f_measure = f_measure/(precision+recall)
-                proportion = formatted_train_labels.count(n)/len(formatted_train_labels)
+                if(precision+recall!=0):
+                    f_measure = 2*precision*recall/(precision+recall)
+                
+            
+                proportion = train_labels.count(n)/len(train_labels)
                 proportions+=[proportion]
                 metrics[stance] = [precision, recall, f_measure, proportion]
             max_props[prefix] = max(proportions)
@@ -183,8 +204,8 @@ class Experiment1_5(Experiment):
         wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
         train_arrays = wvmodel.vectorise_debate(train_data)
         test_arrays  = wvmodel.vectorise_debate(test_data)
-        train_labels = wvmodel.stance_to_vec(train_data)
-        test_labels = wvmodel.stance_to_vec(test_data)
+        train_labels = wvmodel.stance_to_n(train_data)
+        test_labels = wvmodel.stance_to_n(test_data)
         print("Training on", self.seen_target, "debates")
         self.classifier.fit(train_arrays,train_labels)
         print("Testing on", self.unseen_target, "debates")
@@ -211,56 +232,9 @@ class Experiment1_5(Experiment):
             metrics[stance] = [precision, recall, f_measure, proportion]
         del metrics['NONE']
         return metrics, accuracy, max(proportions)
-    
-class Experiment2(Experiment):
-    def __init__(self, classifier, img_path, dir_cd, dir_4f, seen_target, unseen_target, occ):
-        """
-        A subclass of Experiment specifically for experiment setup 2.
-        
-        :param dir_4f       : the directory of the 4Forum.com files.
-        :param seen_target  : the topic of the training data.
-        :param unseen_target: the topic of the testing data.
-        """
-        super(Experiment2, self).__init__(classifier, img_path, dir_cd)
-        self.dir_4f = dir_4f
-        self.seen_target = seen_target
-        self.unseen_target = unseen_target
-        self.occ = occ
-        self.test_train_ratio = 1/99
-    
-    def evaluate(self, rdr):
-        train_data = rdr.load_cd(self.seen_target,'ALL')
-        print("Training on all", len(train_data.post_list), self.seen_target, "posts")
-        test_size = int(len(train_data.post_list)*self.test_train_ratio)
-        print("Testing on", test_size, self.unseen_target, "posts")
-        test_data = rdr.load_4f(self.unseen_target, test_size)
-        wvm_gen = writer.Writer(train_data, test_data)
-        wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
-        train_arrays = wvmodel.vectorise_debate(train_data)
-        test_arrays  = wvmodel.vectorise_debate(test_data)
-        print('Training')
-        self.occ.fit(train_arrays)
-        train_labels = wvmodel.stance_to_vec(train_data)
-        test_labels = wvmodel.stance_to_vec(test_data)
-        print(train_arrays.shape)
-        print(train_labels.shape)
-        self.classifier.fit(train_arrays,train_labels)
-        
-        print('Testing')
-        predictions=[]
-        for p in test_arrays:
-            if self.occ.predict([p]) == -1:
-                prediction = [0]
-            else:
-                prediction = self.classifier.predict([p])
-            predictions += prediction
-        print(predictions)
-        print(test_labels)
-        acc = sum([x[0]==x[1] for x in zip(test_labels,predictions)])/test_size
-        print("Accuracy:",acc)
 
 def correctness(actual, predicted, class_n):
-    return sum([(x[0]==x[1] and x[0]==class_n) for x in zip(actual, predicted)])
+    return list(zip(actual, predicted)).count((class_n, class_n))
 
 def extract_metrics(mets, stance, m_int):
     #m_int 0 for precision, 1 for recall, 2 for f-measure
@@ -293,47 +267,50 @@ if __name__ == '__main__':
     rdr=reader.Reader(dir_cd)
     
     valid_setup = 0 < args['setup'] < 3
-    setup_choice = 'setup ' + str(args['setup']) if valid_setup else reader.select_opt(['setup 1','setup 1.5'],'Select an experiment setup:')
+    setup_choice = 'setup ' + str(args['setup']) if valid_setup else reader.select_opt(['setup 1','setup 1_5'],'Select an experiment setup:')
     img_path = input("Where should graphs be exported to?") if not args['image'] else args['image']
     topic = rdr.select_topic() if args['topic'] not in rdr.dir_lst else args['topic']
     
-    if(input('reload data for experiment 1?').lower() == 'y'):
-        train_data1={}
-        test_data1={}
-        for prefix in reader.subsetAZ(dir_cd + topic):
-            print('Loading', prefix)
-            train_data1[prefix] = rdr.load_cd(topic, prefix, True)
-            test_data1[prefix] = rdr.load_cd(topic, prefix)
     
-    if classifier_choice in baselines:
-        wvm_gen = writer.Writer_X1(train_data1[prefix], topic, prefix)
-        if(input('regenerate models for experiment 1?') == 'y'):
-            models1 = {}
-            print('Generating Models')
-            for prefix in reader.subsetAZ(dir_cd + topic):
-                print(prefix)
-                models1[prefix] =  Model_Wrapper(wvm_gen.skipgram(15,4,151))
-                models1[prefix].model.save('./out/experiment_1/' + topic + '/' + prefix + '.wv')
-        else:
-            print('Loading Models')
-            for prefix in reader.subsetAZ(dir_cd + topic):
-                print(prefix)
-                models1[prefix] =  Model_Wrapper(Word2Vec.load('./out/experiment_1/' + topic + '/' + prefix + '.wv'))
-    else:
-        print('Generating Models')
-        models1 = {}
-        for prefix in reader.subsetAZ(dir_cd + topic):
-            print(prefix)
-            models1[prefix] = Model_Wrapper(None, True)
     
     if setup_choice == 'setup 1':
         #Experiment 1 args: -i ./img/experiment_1/ -s 1 -d ./data/CreateDebate/
+        
+        if(input('reload data for experiment 1?').lower() == 'y'):
+            train_data1={}
+            test_data1={}
+            for prefix in reader.subsetAZ(dir_cd + topic):
+                print('Loading', prefix)
+                train_data1[prefix] = rdr.load_cd(topic, prefix, True)
+                test_data1[prefix] = rdr.load_cd(topic, prefix)
+        
+        if classifier_choice in baselines:
+            wvm_gen = writer.Writer_X1(train_data1[prefix], topic, prefix)
+            if(input('regenerate models for experiment 1?') == 'y'):
+                models1 = {}
+                print('Generating Models')
+                for prefix in reader.subsetAZ(dir_cd + topic):
+                    print(prefix)
+                    models1[prefix] =  Model_Wrapper(wvm_gen.skipgram(15,4,151))
+                    models1[prefix].model.save('./out/experiment_1/' + topic + '/' + prefix + '.wv')
+            else:
+                print('Loading Models')
+                for prefix in reader.subsetAZ(dir_cd + topic):
+                    print(prefix)
+                    models1[prefix] =  Model_Wrapper(Word2Vec.load('./out/experiment_1/' + topic + '/' + prefix + '.wv'))
+        else:
+            print('Generating Models')
+            models1 = {}
+            for prefix in reader.subsetAZ(dir_cd + topic):
+                print(prefix)
+                models1[prefix] = Model_Wrapper(None, True)
+        
+        
         classifier1 = copy.deepcopy(classifier_dict[classifier_choice]) 
         experiment1 = Experiment1(classifier1,img_path,dir_cd, topic, train_data1, test_data1, models1)
         mets, accs, max_props = experiment1.evaluate()
         print("Accuracy:", np.mean(list(accs.values())))
         for prefix, metrics in mets.items():
-            del metrics['NONE']
             print("\\newline")
             print(prefix)
             print('\\newline')
@@ -374,24 +351,14 @@ if __name__ == '__main__':
         experiment1.bar_plot(against_f, favor_f, 'AGAINST','FAVOR', classifier_choice, 'f-measure')
         
     else:
-        #==============================================================================
-        # #Experiment 2 args: -i ./img/experiment_2/ -s 2 -d ./data/CreateDebate/ -4 ./data/fourforums/
-        # dir_4f = input("Where are the posts from 4Forums.com stored?") if not args['4forums'] else args['4forums'] #./data/fourforums/
-        # rdr.dir_4f = dir_4f
-        # unseen_target = rdr.select_target() if args['unseen'] not in rdr.topic_4f else args['unseen']
-        # classifier2 = copy.deepcopy(classifier_dict[classifier_choice]) 
-        # 
-        # occ = svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
-        # 
-        # experiment2 = Experiment2(classifier2,img_path,dir_cd,dir_4f,topic,unseen_target, occ)
-        # experiment2.evaluate(rdr)
-        #==============================================================================
         #Experiment 1.5 args: -i ./img/experiment_1_5/ -s 2 -d ./data/CreateDebate/
         classifier1_5 = copy.deepcopy(classifier_dict[classifier_choice])
         unseen_target = rdr.select_topic() if args['unseen'] not in rdr.dir_lst else args['unseen']
-        experiment1_5 = Experiment1_5(classifier1_5,img_path,dir_cd,topic, unseen_target)
-
-        met, acc, max_prop = experiment1_5.evaluate(rdr)
-        print("Accuracy:", acc)
-        print("Proportion of Most Frequent Class in Training Data:", max_prop)
-        print(tabulate.tabulate(met, headers="keys", tablefmt="latex"))
+        print("foo bar")
+        if(input('Reload data?') == 'y'):
+            train_data = rdr.load_cd(topic, 'ALL')
+            test_data = rdr.load_cd(unseen_target, 'ALL')
+            wvmodel = Model_Wrapper(None,True)
+        train_arrays = wvmodel.vectorise_debate(train_data)
+        train_labels = wvmodel.stance_to_n(train_data)
+        classifier1_5.fit(train_arrays, train_labels)
