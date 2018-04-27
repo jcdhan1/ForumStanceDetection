@@ -11,8 +11,9 @@ from sklearn import svm
 from gensim.models import Word2Vec
 from sklearn.preprocessing import scale
 import matplotlib.pyplot as plt
+import random
 
-
+import collections
 from keras.preprocessing.sequence import pad_sequences
 from keras.preprocessing.text import Tokenizer
 
@@ -23,7 +24,9 @@ STANCES = {'AGAINST': 0, 'FAVOR': 1}
 class Model_Wrapper:
     def __init__(self, model, conditional=False):
         self.model = model                 
-        self.conditional = conditional                                                                                                                                                                                                                                                                     
+        self.conditional = conditional               
+        if conditional:
+            self.tokenizer =      Tokenizer(num_words=20000, split=' ')                                                                                                                                                                                                                                                  
     
     def vectorise_body(self, tokenised_body):
         v_of_vectors = np.zeros(self.model.layer1_size).reshape((1, self.model.layer1_size))
@@ -40,12 +43,10 @@ class Model_Wrapper:
     
     def vectorise_debate(self, debate):
         if self.conditional:
-            tokenizer = Tokenizer(num_words=151, split=' ')
             
             sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in debate.post_list])
-            
-            tokenizer.fit_on_texts(sanitized_bodies)
-            vecs = tokenizer.texts_to_sequences(sanitized_bodies)
+            self.tokenizer.fit_on_texts(sanitized_bodies) #only for training data
+            vecs = self.tokenizer.texts_to_sequences(sanitized_bodies)
             vecs = pad_sequences(vecs)
             return vecs
         else:
@@ -71,6 +72,9 @@ class Experiment:
         self.train_data = train_data
         self.models = models
         
+    def img_directory(self):
+        return self.topic
+    
     def bar_plot(self, dict_1, dict_2, name_1, name_2, classifier, m_name=''):
         
         N = len(dict_1)
@@ -102,9 +106,6 @@ class Experiment1(Experiment):
         """
         super(Experiment1, self).__init__(classifier, img_path, dir_cd, train_data, test_data, models)
         self.topic = topic
-        
-    def img_directory(self):
-        return self.topic
     
     def evaluate(self):
         mets = {}
@@ -122,12 +123,11 @@ class Experiment1(Experiment):
             print("Testing on", topic, "debate", prefix)
             
             if wvmodel.conditional:
-                tokenizer = Tokenizer(num_words=20000, split=' ')
             
                 sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in self.test_data[prefix].post_list])
                 
-                tokenizer.fit_on_texts(sanitized_bodies)
-                vecs = tokenizer.texts_to_sequences(sanitized_bodies)
+                #tokenizer.fit_on_texts(sanitized_bodies)
+                vecs = wvmodel.tokenizer.texts_to_sequences(sanitized_bodies)
                 test_arrays = pad_sequences(vecs, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
                 score,accuracy = self.classifier.nn.evaluate(test_arrays, test_labels, verbose = 2, batch_size = 64)
                 print("score: %.2f" % (score))
@@ -242,7 +242,20 @@ def extract_metrics(mets, stance, m_int):
 
 def x1_filename(classifier, name_1, name_2, m_name=''):
     return classifier.replace(" ", "") + name_1 + name_2 + m_name + '.svg'
-    
+
+def equal_stance_proportions(debate):
+    #Get most common stance and its frequency and least frequent stance and its frequency
+    most_tup, least_tup = collections.Counter([p.label for p in debate.post_list]).most_common()
+    #Select all of the least common
+    least_lst = list(filter(lambda p: p.label==least_tup[0], debate.post_list))
+    #Randomly select n of the formerly most common where n is the frequency of what was least common.
+    most_lst = list(filter(lambda p: p.label==most_tup[0], debate.post_list))
+    random.shuffle(most_lst)
+    most_lst = most_lst[0:least_tup[1]]
+    equal_stances =  most_lst + least_lst
+    random.shuffle(equal_stances)
+    return preprocess.Debate(debate.topic, equal_stances)
+
 if __name__ == '__main__':
     plt.rcParams['svg.fonttype'] = 'none'
     parser = argparse.ArgumentParser(description='Run experiments setup 1 or 1.5.')
@@ -358,7 +371,63 @@ if __name__ == '__main__':
         if(input('Reload data?') == 'y'):
             train_data = rdr.load_cd(topic, 'ALL')
             test_data = rdr.load_cd(unseen_target, 'ALL')
+            
+            train_data = equal_stance_proportions(train_data)
+            test_data = equal_stance_proportions(test_data)
+        if classifier_choice in baselines:
+            wvm_gen = writer.Writer(train_data)
+            wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
+            test_arrays = wvmodel.vectorise_debate(test_data)
+        else:
             wvmodel = Model_Wrapper(None,True)
+            
         train_arrays = wvmodel.vectorise_debate(train_data)
         train_labels = wvmodel.stance_to_n(train_data)
+        test_labels = wvmodel.stance_to_n(test_data)
         classifier1_5.fit(train_arrays, train_labels)
+        if classifier_choice in baselines:
+            accuracy = classifier1_5.score(test_arrays, test_labels)
+            predicted = list(classifier1_5.predict(test_arrays))
+        else:
+            sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in test_data.post_list])
+            
+            #tokenizer.fit_on_texts(sanitized_bodies)
+            vecs = wvmodel.tokenizer.texts_to_sequences(sanitized_bodies)
+            test_arrays = pad_sequences(vecs, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
+            score,accuracy = classifier1_5.nn.evaluate(test_arrays, test_labels, verbose = 2, batch_size = 64)
+            print("score: %.2f" % (score))
+            print("acc: %.2f" % (accuracy))
+            predicted = list(classifier1_5.nn.predict_classes(test_arrays).flatten())
+        
+        
+        print(accuracy)
+        print(predicted)
+        
+        dummy = Experiment(None, img_path,dir_cd)
+        dummy.topic = None
+        metrics = {}
+        for stance, n in STANCES.items():
+            
+            denominatorP=predicted.count(n)
+            denominatorR=test_labels.count(n)
+            if denominatorP + predicted.count(abs(1-n)) !=len(test_labels):
+                raise ValueError('Incorrect number of stances')
+            
+            #Avoid division by 0
+            numerator = correctness(test_labels,predicted, n)
+                                
+            precision = 0
+            if(denominatorP!=0):
+                precision = numerator/denominatorP
+                
+            recall = 0
+            if(denominatorR!=0):
+                recall = numerator/denominatorR
+            
+            f_measure = 0
+            if(precision+recall!=0):
+                f_measure = 2*precision*recall/(precision+recall)
+            
+        
+    
+            metrics[stance] = [precision, recall, f_measure]
