@@ -113,54 +113,65 @@ class Experiment1(Experiment):
         max_props = {}
         for prefix in reader.subsetAZ(self.dir_cd + self.topic):
             wvmodel = self.models[prefix]
-            train_arrays = wvmodel.vectorise_debate(self.train_data[prefix])
-            if not wvmodel.conditional:
-                test_arrays  = wvmodel.vectorise_debate(self.test_data[prefix])
-            train_labels = wvmodel.stance_to_n(self.train_data[prefix])
-            test_labels = wvmodel.stance_to_n(self.test_data[prefix])
-            print("Training on", topic, "debates except for", prefix)
-            self.classifier.fit(train_arrays,train_labels)
-            print("Testing on", topic, "debate", prefix)
+            
             
             if wvmodel.conditional:
-            
-                sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in self.test_data[prefix].post_list])
                 
-                #tokenizer.fit_on_texts(sanitized_bodies)
-                vecs = wvmodel.tokenizer.texts_to_sequences(sanitized_bodies)
-                test_arrays = pad_sequences(vecs, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
-                score,accuracy = self.classifier.nn.evaluate(test_arrays, test_labels, verbose = 2, batch_size = 64)
-                print("score: %.2f" % (score))
-                print("acc: %.2f" % (accuracy))
-                predicted = list(self.classifier.nn.predict_classes(test_arrays).flatten())
+            
+                #Tokenisation of training data
+                max_features = 20000
+                the_tokenizer = Tokenizer(num_words=max_features, split=' ')
+                the_tokenizer.fit_on_texts(([p.body for p in self.train_data[prefix].post_list])) #Only do this for the training data
+                train_array = the_tokenizer.texts_to_sequences([p.body for p in self.train_data[prefix].post_list])
+                train_array = pad_sequences(train_array)
+                train_label = [STANCES[p.label] for p in self.train_data[prefix].post_list]
+                
+                #Training
+                self.classifier.fit(train_array, train_label)
+                
+                #Tokenisation of testing data
+                test_array = the_tokenizer.texts_to_sequences([p.body for p in self.test_data[prefix].post_list])
+                test_array = pad_sequences(test_array, maxlen=train_array.shape[1])
+                test_label = [STANCES[p.label] for p in self.test_data[prefix].post_list]
+                
+                
+                score, accuracy = self.classifier.nn.evaluate(test_array, test_label)
+                predicted = list(self.classifier.nn.predict_classes(test_array).flatten())
             else:
-                accuracy = self.classifier.score(test_arrays, test_labels)
+                train_arrays = wvmodel.vectorise_debate(self.train_data[prefix])
+                test_arrays  = wvmodel.vectorise_debate(self.test_data[prefix])
+                train_label = wvmodel.stance_to_n(self.train_data[prefix])
+                test_label = wvmodel.stance_to_n(self.test_data[prefix])
+                print("Training on", topic, "debates except for", prefix)
+                self.classifier.fit(train_arrays,train_label)
+                print("Testing on", topic, "debate", prefix)
+                
+                accuracy = self.classifier.score(test_arrays, test_label)
                 predicted = list(self.classifier.predict(test_arrays))
             
             accs[prefix] = accuracy
             print("Accuracy:", accuracy)
            
             metrics={'Metric': ['Precision', 'Recall', 'F-measure', 'Proportion in Training Data']}
+           
             
-            actual=test_labels
-            
-            print(actual)
+            print(test_label)
             print(predicted)
-            print(set(actual))
+            print(set(test_label))
             print(set(predicted))
-            print(len(actual))
+            print(len(test_label))
             print(len(predicted))
             
             proportions=[]
             for stance, n in STANCES.items():
                 
                 denominatorP=predicted.count(n)
-                denominatorR=actual.count(n)
-                if denominatorP + predicted.count(abs(1-n)) !=len(actual):
+                denominatorR=test_label.count(n)
+                if denominatorP + predicted.count(abs(1-n)) !=len(test_label):
                     raise ValueError('Incorrect number of stances')
                 
                 #Avoid division by 0
-                numerator = correctness(actual,predicted, n)
+                numerator = correctness(test_label,predicted, n)
                                     
                 precision = 0
                 if(denominatorP!=0):
@@ -175,63 +186,12 @@ class Experiment1(Experiment):
                     f_measure = 2*precision*recall/(precision+recall)
                 
             
-                proportion = train_labels.count(n)/len(train_labels)
+                proportion = train_label.count(n)/len(train_label)
                 proportions+=[proportion]
                 metrics[stance] = [precision, recall, f_measure, proportion]
             max_props[prefix] = max(proportions)
             mets[prefix] = metrics
         return mets, accs, max_props
-    
-class Experiment1_5(Experiment):
-    def __init__(self, classifier, img_path, dir_cd, seen_target, unseen_target, train_data={}, test_data={}, model={}):
-        """
-        A subclass of Experiment specifically for experiment setup 1.5
-        
-        :param seen_target  : the topic of the training data.
-        :param unseen_target: the topic of the testing data.
-        """
-        super(Experiment1_5, self).__init__(classifier, img_path, dir_cd, train_data, test_data, models)
-        self.seen_target = seen_target
-        self.unseen_target = unseen_target
-        
-    def img_directory(self):
-        return self.seen_target + self.unseen_target
-    
-    def evaluate(self, rdr):
-        train_data = rdr.load_cd(self.seen_target, 'ALL')
-        test_data = rdr.load_cd(self.unseen_target, 'ALL')
-        wvm_gen = writer.Writer(train_data, test_data)
-        wvmodel = Model_Wrapper(wvm_gen.skipgram(15,4,151))
-        train_arrays = wvmodel.vectorise_debate(train_data)
-        test_arrays  = wvmodel.vectorise_debate(test_data)
-        train_labels = wvmodel.stance_to_n(train_data)
-        test_labels = wvmodel.stance_to_n(test_data)
-        print("Training on", self.seen_target, "debates")
-        self.classifier.fit(train_arrays,train_labels)
-        print("Testing on", self.unseen_target, "debates")
-        
-        # Evaluation Metrics
-        accuracy = self.classifier.score(test_arrays, test_labels)
-        predicted = list(self.classifier.predict(test_arrays))
-        metrics={'Metric': ['Precision', 'Recall', 'F-measure', 'Proportion in Training Data']}
-        proportions=[]
-        for stance, n in STANCES.items():
-            #Avoid division by zero if testing data doesn't have the stance
-            numerator = correctness(test_labels,predicted, n)
-            denominator1 = predicted.count(n)
-            denominator2 = test_labels.count(n)
-            precision = numerator/denominator1 if denominator1 > 0 else "n/a"
-            recall = numerator/denominator2 if denominator2 > 0 else "n/a"
-            f_measure = "n/a"
-            if denominator1 > 0 and denominator2 > 0:
-                f_measure = 2*precision*recall
-                if precision+recall > 0:
-                    f_measure = f_measure/(precision+recall)
-            proportion = train_labels.count(n)/len(train_labels)
-            proportions+=[proportion]
-            metrics[stance] = [precision, recall, f_measure, proportion]
-        del metrics['NONE']
-        return metrics, accuracy, max(proportions)
 
 def correctness(actual, predicted, class_n):
     return list(zip(actual, predicted)).count((class_n, class_n))
@@ -330,6 +290,7 @@ if __name__ == '__main__':
             print("Accuracy:", accs[prefix])
             print('\\newline')
             print(tabulate.tabulate(metrics, headers="keys", tablefmt="latex"))
+        print('\\newline')
         print("Number of times accuracy was greater than proportion of most frequent stance in training data:", sum([accs[prefix] > max_props[prefix] for prefix in reader.subsetAZ(dir_cd + topic)]))
         print("\\newline")
         print("\\begin{minipage}{\linewidth}")
@@ -382,11 +343,11 @@ if __name__ == '__main__':
             wvmodel = Model_Wrapper(None,True)
             
         train_arrays = wvmodel.vectorise_debate(train_data)
-        train_labels = wvmodel.stance_to_n(train_data)
-        test_labels = wvmodel.stance_to_n(test_data)
-        classifier1_5.fit(train_arrays, train_labels)
+        train_label = wvmodel.stance_to_n(train_data)
+        test_label = wvmodel.stance_to_n(test_data)
+        classifier1_5.fit(train_arrays, train_label)
         if classifier_choice in baselines:
-            accuracy = classifier1_5.score(test_arrays, test_labels)
+            accuracy = classifier1_5.score(test_arrays, test_label)
             predicted = list(classifier1_5.predict(test_arrays))
         else:
             sanitized_bodies = np.array([re.sub('[^a-zA-z0-9\s]','',p.body.lower()) for p in test_data.post_list])
@@ -394,7 +355,7 @@ if __name__ == '__main__':
             #tokenizer.fit_on_texts(sanitized_bodies)
             vecs = wvmodel.tokenizer.texts_to_sequences(sanitized_bodies)
             test_arrays = pad_sequences(vecs, maxlen=train_arrays.shape[1], dtype='int32', padding='post', truncating='post', value=0)
-            score,accuracy = classifier1_5.nn.evaluate(test_arrays, test_labels, verbose = 2, batch_size = 64)
+            score,accuracy = classifier1_5.nn.evaluate(test_arrays, test_label, verbose = 2, batch_size = 64)
             print("score: %.2f" % (score))
             print("acc: %.2f" % (accuracy))
             predicted = list(classifier1_5.nn.predict_classes(test_arrays).flatten())
@@ -409,12 +370,12 @@ if __name__ == '__main__':
         for stance, n in STANCES.items():
             
             denominatorP=predicted.count(n)
-            denominatorR=test_labels.count(n)
-            if denominatorP + predicted.count(abs(1-n)) !=len(test_labels):
+            denominatorR=test_label.count(n)
+            if denominatorP + predicted.count(abs(1-n)) !=len(test_label):
                 raise ValueError('Incorrect number of stances')
             
             #Avoid division by 0
-            numerator = correctness(test_labels,predicted, n)
+            numerator = correctness(test_label,predicted, n)
                                 
             precision = 0
             if(denominatorP!=0):

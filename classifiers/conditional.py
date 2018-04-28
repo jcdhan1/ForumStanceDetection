@@ -11,6 +11,9 @@ import reader, preprocess, random, collections
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 
+
+max_features = 20000
+
 class LSTM_Network:
     def __init__(self):
         self.nn = None
@@ -18,7 +21,7 @@ class LSTM_Network:
     def fit(self, train_arrays, train_labels):
         del self.nn
         self.nn = Sequential()
-        self.nn.add(Embedding(2000, 128,input_length = train_arrays.shape[1]))
+        self.nn.add(Embedding(max_features, 128,input_length = train_arrays.shape[1]))
         self.set_layer()
         self.nn.add(Dropout(0.5))
         self.nn.add(Dense(1,activation='sigmoid'))
@@ -41,7 +44,7 @@ class Bidirectional_Encoding(LSTM_Network):
 
 def equal_stance_proportions(debate):
     #Get most common stance and its frequency and least frequent stance and its frequency
-    most_tup, least_tup = collections.Counter([p.label for p in debate.post_list]).most_common()
+    most_tup, least_tup = collections.Counter([p.label for p in debate.post_list]).most_common()[:2]
     #Select all of the least common
     least_lst = list(filter(lambda p: p.label==least_tup[0], debate.post_list))
     #Randomly select n of the formerly most common where n is the frequency of what was least common.
@@ -57,12 +60,10 @@ if __name__ == '__main__':
     #Get raw data
     rdr=reader.Reader('../data/CreateDebate/')
     #Make sure the proportions of each stance in training and testing data are equal
-    train_posts = equal_stance_proportions(rdr.load_cd('marijuana', 'ALL')).post_list
-    test_posts =  equal_stance_proportions(rdr.load_cd('marijuana', 'ALL')).post_list
+    train_posts = equal_stance_proportions(rdr.load_cd('obama', 'ALL')).post_list
     
     #Tokenisation of training data
-    max_fatures = 2000
-    the_tokenizer = Tokenizer(num_words=max_fatures, split=' ')
+    the_tokenizer = Tokenizer(num_words=max_features, split=' ')
     the_tokenizer.fit_on_texts(([p.body for p in train_posts])) #Only do this for the training data
     train_array = the_tokenizer.texts_to_sequences([p.body for p in train_posts])
     train_array = pad_sequences(train_array)
@@ -73,6 +74,7 @@ if __name__ == '__main__':
     the_classifier.fit(train_array, train_label)
     
     #Tokenisation of testing data
+    test_posts =  equal_stance_proportions(rdr.load_cd('marijuana', 'ALL')).post_list
     test_array = the_tokenizer.texts_to_sequences([p.body for p in test_posts])
     test_array = pad_sequences(test_array, maxlen=train_array.shape[1])
     test_label = [STANCES[p.label] for p in test_posts]
