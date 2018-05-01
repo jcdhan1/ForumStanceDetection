@@ -13,7 +13,7 @@ def concatenate_posts(topic, rdr):
         doc = concatenate(bodies)
         debates_for_target += [doc]
     random.shuffle(debates_for_target)
-    debates_for_target[0], debates_for_target[-1] = debates_for_target[-1], debates_for_target[0]
+    debates_for_target.reverse()
     return debates_for_target
 
 def concatenate(string_list):
@@ -25,9 +25,7 @@ if __name__ == '__main__':
     trial = reader.input_int('Which trial', 1, 5)
     print("Trial:", trial)
     rdr=reader.Reader(dir_cd)
-    seen_target_dbt = concatenate_posts('obama', rdr)
-    random.shuffle(seen_target_dbt)
-    seen_target_doc = concatenate(seen_target_dbt)
+    seen_target_doc = concatenate(concatenate_posts('obama', rdr))
     tokenised_seen_target_doc = writer.filterStopwords(tokenize(seen_target_doc.lower()))
     rdr.dir_lst.remove('obama')
     documents = []
